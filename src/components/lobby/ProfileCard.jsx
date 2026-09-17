@@ -2,10 +2,10 @@ import RoleBadge from '../RoleBadge'
 import Spinner from '../Spinner'
 
 /**
- * Card dedicado ao perfil do usuário no lobby:
- * avatar, selo do papel, nível/XP e estatísticas placeholders.
+ * Cartão-resumo do perfil: avatar, nome#tag, selo do papel,
+ * nível/XP e estatísticas placeholders.
  */
-export default function ProfileCard({ username, email, role, memberSince, loading }) {
+export default function ProfileCard({ username, tag, email, role, memberSince, loading }) {
   if (loading) {
     return (
       <section className="flex h-64 items-center justify-center rounded-2xl border border-zinc-200 bg-white dark:border-white/10 dark:bg-white/[0.04]">
@@ -24,8 +24,11 @@ export default function ProfileCard({ username, email, role, memberSince, loadin
           {username.slice(0, 1).toUpperCase()}
         </span>
 
-        <h3 className="mt-2.5 flex items-center gap-2 text-lg font-bold text-zinc-900 dark:text-white">
+        <h3 className="mt-2.5 flex flex-wrap items-center justify-center gap-1.5 text-lg font-bold text-zinc-900 dark:text-white">
           {username}
+          {tag && (
+            <span className="font-mono text-sm font-medium text-zinc-400 dark:text-zinc-500">#{tag}</span>
+          )}
           <RoleBadge role={role} size="sm" />
         </h3>
         <p className="mt-0.5 max-w-full truncate text-xs text-zinc-400 dark:text-zinc-500">{email}</p>

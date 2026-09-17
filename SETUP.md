@@ -173,6 +173,105 @@ altera papéis.
 📌 *Próxima etapa:* vou criar um **painel admin dentro do próprio app**, onde você
 promove/rebaixa mods com um clique (as permissões acima já deixam isso pronto).
 
+---
+
+## 🏷️ Migração v3 — Tags únicas (estilo Discord)
+
+Cada jogador recebe uma tag `#5624` gerada automaticamente. O **nome pode mudar,
+a tag permanece** — é ela que diferencia dois jogadores com o mesmo nome.
+Contas `adm` não usam tag. Rode **uma única vez** no SQL Editor:
+
+```sql
+-- 1) Nova coluna
+alter table public.profiles
+  add column if not exists tag text;
+
+-- 2) Gerador de tag livre para um dado username
+create or replace function public.generate_unique_tag(p_username text)
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_tag text;
+begin
+  loop
+    v_tag := lpad((floor(random() * 9999) + 1)::text, 4, '0');
+    exit when not exists (
+      select 1 from public.profiles
+      where username = p_username and tag = v_tag
+    );
+  end loop;
+  return v_tag;
+end;
+$$;
+
+-- 3) O nome deixa de ser único sozinho; o PAR (nome, tag) é que é único
+alter table public.profiles
+  drop constraint if exists profiles_username_key;
+
+alter table public.profiles
+  add constraint profiles_username_tag_key unique (username, tag);
+
+-- 4) Tag para todos os usuários existentes (menos o adm)
+update public.profiles p
+set tag = public.generate_unique_tag(coalesce(p.username, 'user'))
+where p.tag is null and p.role <> 'adm';
+
+update public.profiles set tag = null where role = 'adm';
+
+-- 5) Todo novo cadastro já ganha a tag automaticamente
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_username text;
+begin
+  v_username := coalesce(new.raw_user_meta_data ->> 'username', split_part(new.email, '@', 1));
+  insert into public.profiles (id, username, tag)
+  values (new.id, v_username, public.generate_unique_tag(v_username));
+  return new;
+end;
+$$;
+
+-- 6) Jogador não muda a própria tag (prepara o futuro plano pago:
+--    só o adm, ou você no SQL, podem personalizar uma tag)
+create or replace function public.guard_tag_change()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if auth.uid() is not null
+     and new.tag is distinct from old.tag
+     and not public.is_adm() then
+    raise exception 'A tag nao pode ser alterada por aqui.';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists profiles_guard_tag on public.profiles;
+create trigger profiles_guard_tag
+  before update on public.profiles
+  for each row execute function public.guard_tag_change();
+```
+
+🔮 **Gancho para o plano pago (futuro):** para deixar um assinante escolher a tag,
+basta o adm alterar pelo painel/SQL respeitando a unicidade `(username, tag)`:
+
+```sql
+update public.profiles set tag = '0001'
+where id = (select id from auth.users where email = 'vip@exemplo.com');
+```
+
+---
+
 ## 🔑 Sobre a senha do adm (`123`)
 
 - Ela funciona porque foi gravada **direto no banco** (criptografada com bcrypt).
