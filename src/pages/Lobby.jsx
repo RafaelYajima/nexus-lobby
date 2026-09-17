@@ -1,6 +1,7 @@
 import AppHeader from '../components/AppHeader'
 import HeroCarousel from '../components/lobby/HeroCarousel'
 import GameCard from '../components/lobby/GameCard'
+import OnlineNow from '../components/lobby/OnlineNow'
 import { useAuth } from '../context/AuthContext'
 import { useProfile } from '../hooks/useProfile'
 import { GAMES } from '../data/games'
@@ -46,6 +47,10 @@ export default function Lobby() {
           </div>
           <p className="text-sm text-zinc-400 dark:text-zinc-500">O que vamos jogar hoje?</p>
         </section>
+
+        <div className="mb-6">
+          <OnlineNow />
+        </div>
 
         <HeroCarousel onCta={scrollToGames} />
 
