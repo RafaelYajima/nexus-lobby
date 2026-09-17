@@ -10,6 +10,7 @@ import RoleBadge from './RoleBadge'
 const NAV_ITEMS = [
   { label: 'Lobby', to: '/lobby' },
   { label: 'Perfil', to: '/perfil' },
+  { label: 'Amigos', to: '/amigos' },
   { label: 'Admin', to: '/admin', admOnly: true },
   { label: 'Loja', to: null },
   { label: 'Ranking', to: null },

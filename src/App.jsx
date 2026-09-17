@@ -4,6 +4,7 @@ import ResetPassword from './pages/ResetPassword'
 import Lobby from './pages/Lobby'
 import ProfilePage from './pages/ProfilePage'
 import AdminPage from './pages/AdminPage'
+import FriendsPage from './pages/FriendsPage'
 import ProtectedRoute from './components/ProtectedRoute'
 import RequireAdm from './components/RequireAdm'
 
@@ -21,13 +22,21 @@ export default function App() {
         }
       />
       <Route
-        path="/perfil"
-        element={
-          <ProtectedRoute>
-            <ProfilePage />
-          </ProtectedRoute>
-        }
-      />
+            path="/perfil"
+            element={
+              <ProtectedRoute>
+                <ProfilePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/amigos"
+            element={
+              <ProtectedRoute>
+                <FriendsPage />
+              </ProtectedRoute>
+            }
+          />
       <Route
         path="/admin"
         element={

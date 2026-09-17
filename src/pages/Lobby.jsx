@@ -1,7 +1,7 @@
 import AppHeader from '../components/AppHeader'
 import HeroCarousel from '../components/lobby/HeroCarousel'
 import GameCard from '../components/lobby/GameCard'
-import OnlineNow from '../components/lobby/OnlineNow'
+import FriendsOnlineStrip from '../components/lobby/FriendsOnlineStrip'
 import { useAuth } from '../context/AuthContext'
 import { useProfile } from '../hooks/useProfile'
 import { GAMES } from '../data/games'
@@ -49,7 +49,7 @@ export default function Lobby() {
         </section>
 
         <div className="mb-6">
-          <OnlineNow />
+          <FriendsOnlineStrip />
         </div>
 
         <HeroCarousel onCta={scrollToGames} />

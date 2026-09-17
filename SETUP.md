@@ -272,6 +272,77 @@ where id = (select id from auth.users where email = 'vip@exemplo.com');
 
 ---
 
+## 👥 Migração v4 — Amizades + presença com status (estilo Discord)
+
+O recurso **Amigos** (página `/amigos` + faixa de amigos online no lobby) precisa desta migração para funcionar. O sistema de **status** (🟢 Online / 🟡 Ausente / ⚪ Invisível) **não depende dela** — funciona via Realtime + localStorage.
+
+**Importante**: esta migração inclui uma policy que torna os perfis visíveis para qualquer usuário autenticado (necessário para a busca "adicionar amigo"). É a mesma visibilidade que qualquer lobby de jogos tem (nomes de jogadores são públicos para outros jogadores).
+
+```sql
+-- ========================================================
+-- MIGRAÇÃO v4 — Amizades (pedidos, aceites e descoberta)
+-- Rode no SQL Editor do Supabase. Idempotente.
+-- ========================================================
+
+-- tabela de amizades
+create table if not exists public.friendships (
+  id          uuid primary key default gen_random_uuid(),
+  requester   uuid not null references auth.users (id) on delete cascade,
+  addressee   uuid not null references auth.users (id) on delete cascade,
+  status      text not null default 'pending' check (status in ('pending', 'accepted')),
+  created_at  timestamptz not null default now(),
+  constraint  friendships_no_self check (requester <> addressee)
+);
+
+-- impede (A,B) e (B,A) duplicados (um par = uma linha)
+create unique index if not exists friendships_par_unico
+  on public.friendships (least(requester, addressee), greatest(requester, addressee));
+
+alter table public.friendships enable row level security;
+
+drop policy if exists "ve_amizades_proprias"   on public.friendships;
+drop policy if exists "cria_amizade"           on public.friendships;
+drop policy if exists "responde_amizade"       on public.friendships;
+drop policy if exists "remove_amizade"         on public.friendships;
+
+-- só os dois envolvidos veem a amizade
+create policy "ve_amizades_proprias" on public.friendships
+  for select using (requester = auth.uid() or addressee = auth.uid());
+
+-- usuário só cria pedido em seu próprio nome
+create policy "cria_amizade" on public.friendships
+  for insert with check (requester = auth.uid());
+
+-- só o DESTINATÁRIO responde (aceita)
+create policy "responde_amizade" on public.friendships
+  for update using (addressee = auth.uid());
+
+-- qualquer um dos dois remove (cancelar pedido ou desfazer amizade)
+create policy "remove_amizade" on public.friendships
+  for delete using (requester = auth.uid() or addressee = auth.uid());
+
+-- perfis visíveis para usuários autenticados:
+-- habilita a busca "adicionar amigo" (nome/tag) e resolve os perfis
+-- de amigos sem função extra. Ajuste anterior era "somente o próprio".
+drop policy if exists "perfis_publicos_para_autenticados" on public.profiles;
+create policy "perfis_publicos_para_autenticados" on public.profiles
+  for select using (true);
+```
+
+**Verificar:**
+
+```sql
+select table_name from information_schema.tables
+ where table_name = 'friendships';          -- esperado: friendships
+select policyname, tablename from pg_policies
+ where tablename in ('friendships','profiles') and schemaname = 'public';
+```
+
+**Notas:**
+- Status (online/ausente/invisível) fica no **canal Realtime** — invisíveis simplesmente não se anunciam; nenhuma tabela guarda quem está online.
+- A preferência de status e o prazo ("ausente até 18h") ficam no `localStorage` do dispositivo + memória da sessão. Se um dia quiser histórico/telemetria, dá pra persistir em tabela depois.
+- Sem a v4: a página `/amigos` mostra aviso amigável "🔧 A tabela de amizades ainda não existe" e o **status continua funcionando** para todo mundo (só não há lista de amigos).
+
 ## 🔑 Sobre a senha do adm (`123`)
 
 - Ela funciona porque foi gravada **direto no banco** (criptografada com bcrypt).
