@@ -238,7 +238,7 @@ export default function AuthPage() {
                 <code className="font-mono">.env</code> seguindo o passo a passo do{' '}
                 <code className="font-mono">SETUP.md</code> e reinicie o servidor.
               </div>
-            )}
+            ))}
 
             {view !== 'forgot' ? (
               /* Abas Entrar / Cadastrar */
@@ -380,6 +380,11 @@ export default function AuthPage() {
             © 2026 NEXUS · Feito para jogadores
           </p>
         </div>
+      </main>
+    </div>
+  )
+}
+>
       </main>
     </div>
   )
