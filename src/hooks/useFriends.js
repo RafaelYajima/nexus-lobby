@@ -4,18 +4,22 @@ import { useAuth } from '../context/AuthContext'
 import { translateError } from '../utils/errors'
 
 /**
- * Sistema de amizades (tabela `friendships` — Migração v4):
- *   friends  → aceitas
- *   incoming → pedidos recebidos aguardando minha resposta
- *   outgoing → pedidos que eu enviei aguardando resposta
- *   blocked  → true quando a tabela/policies ainda não existem no banco
+ * Sistema de amizades:
+ *   friends    → aceitas (tabela `friendships` — Migração v4)
+ *   incoming   → pedidos recebidos aguardando minha resposta
+ *   outgoing   → pedidos que eu enviei aguardando resposta
+ *   favorites  → ids dos amigos que EU favoritei (tabela `friend_favorites` — Migração v5)
+ *   blocked    → friendships ainda não existe (v4 pendente)
+ *   favBlocked → friend_favorites ainda não existe (v5 pendente)
  */
 export function useFriends() {
   const { user } = useAuth()
   const [friends, setFriends] = useState([])
   const [incoming, setIncoming] = useState([])
   const [outgoing, setOutgoing] = useState([])
+  const [favorites, setFavorites] = useState([])
   const [blocked, setBlocked] = useState(false)
+  const [favBlocked, setFavBlocked] = useState(false)
   const [loading, setLoading] = useState(true)
   const [errorMsg, setErrorMsg] = useState('')
 
@@ -68,6 +72,19 @@ export function useFriends() {
     setOutgoing(
       (rows ?? []).filter((r) => r.status === 'pending' && r.requester === user.id).map(decorate)
     )
+
+    // favoritos (v5) — se a tabela não existe ainda, degrada sem quebrar nada
+    const { data: favs, error: favErr } = await supabase
+      .from('friend_favorites')
+      .select('friend_id')
+    if (favErr) {
+      setFavBlocked(true)
+      setFavorites([])
+    } else {
+      setFavBlocked(false)
+      setFavorites((favs ?? []).map((f) => f.friend_id))
+    }
+
     setLoading(false)
   }, [user])
 
@@ -111,5 +128,43 @@ export function useFriends() {
     [load]
   )
 
-  return { friends, incoming, outgoing, blocked, loading, errorMsg, reload: load, sendRequest, accept, remove }
+  /** ⭐ Marca/desmarca favorito (pessoal — o amigo não vê). */
+  const toggleFavorite = useCallback(
+    async (friendId) => {
+      if (favBlocked) {
+        return { ok: false, message: 'Favoritos aguardam a Migração v5 (ver SETUP.md).' }
+      }
+      if (favorites.includes(friendId)) {
+        const { error } = await supabase
+          .from('friend_favorites')
+          .delete()
+          .eq('friend_id', friendId)
+        if (error) return { ok: false, message: translateError(error.message) }
+      } else {
+        const { error } = await supabase
+          .from('friend_favorites')
+          .insert({ user_id: user.id, friend_id: friendId })
+        if (error) return { ok: false, message: translateError(error.message) }
+      }
+      await load()
+      return { ok: true }
+    },
+    [user, favorites, favBlocked, load]
+  )
+
+  return {
+    friends,
+    incoming,
+    outgoing,
+    favorites,
+    favBlocked,
+    blocked,
+    loading,
+    errorMsg,
+    reload: load,
+    sendRequest,
+    accept,
+    remove,
+    toggleFavorite,
+  }
 }

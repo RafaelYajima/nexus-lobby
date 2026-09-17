@@ -343,6 +343,54 @@ select policyname, tablename from pg_policies
 - A preferência de status e o prazo ("ausente até 18h") ficam no `localStorage` do dispositivo + memória da sessão. Se um dia quiser histórico/telemetria, dá pra persistir em tabela depois.
 - Sem a v4: a página `/amigos` mostra aviso amigável "🔧 A tabela de amizades ainda não existe" e o **status continua funcionando** para todo mundo (só não há lista de amigos).
 
+## ⭐ Migração v5 — Favoritos de amizade
+
+Favoritos são **pessoais**: cada usuário tem os seus e o amigo não é notificado/fica sabendo. Só dá pra favoritar amizade **aceita**.
+
+```sql
+-- ========================================================
+-- MIGRAÇÃO v5 — Favoritos (idempotente: pode rodar de novo)
+-- ========================================================
+
+create table if not exists public.friend_favorites (
+  user_id    uuid not null references auth.users (id) on delete cascade,
+  friend_id  uuid not null references auth.users (id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (user_id, friend_id)
+);
+
+alter table public.friend_favorites enable row level security;
+
+drop policy if exists "ve_meus_favoritos"  on public.friend_favorites;
+drop policy if exists "marca_favorito"     on public.friend_favorites;
+drop policy if exists "desmarca_favorito"  on public.friend_favorites;
+
+create policy "ve_meus_favoritos" on public.friend_favorites
+  for select using (user_id = auth.uid());
+
+create policy "marca_favorito" on public.friend_favorites
+  for insert with check (
+    user_id = auth.uid()
+    and exists (
+      select 1 from public.friendships f
+      where f.status = 'accepted'
+        and ((f.requester = auth.uid() and f.addressee = friend_id)
+          or (f.addressee = auth.uid() and f.requester = friend_id))
+    )
+  );
+
+create policy "desmarca_favorito" on public.friend_favorites
+  for delete using (user_id = auth.uid());
+```
+
+**Verificar:**
+
+```sql
+select * from public.friend_favorites;  -- (vazio no começo)
+```
+
+Sem a v5: o app funciona normal, só as estrelinhas ⭐ avisam "rode a Migração v5".
+
 ## 🔑 Sobre a senha do adm (`123`)
 
 - Ela funciona porque foi gravada **direto no banco** (criptografada com bcrypt).

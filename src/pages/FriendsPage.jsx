@@ -3,18 +3,21 @@ import AppHeader from '../components/AppHeader'
 import Spinner from '../components/Spinner'
 import RoleBadge from '../components/RoleBadge'
 import PresenceControl from '../components/presence/PresenceControl'
+import AddFriendMenu from '../components/amigos/AddFriendMenu'
 import { useAuth } from '../context/AuthContext'
 import { usePresence } from '../context/PresenceContext'
 import { useFriends } from '../hooks/useFriends'
-import { supabase } from '../lib/supabaseClient'
+import { useProfile } from '../hooks/useProfile'
 import { PRESENCE_META } from '../lib/presence'
-import { translateError } from '../utils/errors'
-
-const INPUT_CLASSES =
-  'w-full rounded-xl border border-zinc-200 bg-transparent px-4 py-2.5 text-sm text-zinc-800 placeholder-zinc-400 shadow-soft-inner outline-none transition focus:border-violet-500 focus:ring-2 focus:ring-violet-500/30 dark:border-white/10 dark:text-zinc-100'
 
 const GHOST_BTN =
   'rounded-xl border border-zinc-200 px-3.5 py-2 text-xs font-bold text-zinc-500 transition hover:border-violet-400/50 hover:text-zinc-700 dark:border-white/10 dark:text-zinc-400 dark:hover:text-zinc-200'
+
+const FILTERS = [
+  { id: 'todos', label: 'Todos' },
+  { id: 'online', label: 'Online' },
+  { id: 'favoritos', label: 'Favoritos' },
+]
 
 function AvatarStatus({ name, status }) {
   const dot = PRESENCE_META[status]?.dot ?? 'bg-zinc-500'
@@ -30,7 +33,41 @@ function AvatarStatus({ name, status }) {
   )
 }
 
-/** Página 👥 Amigos: status pessoal, pedidos, busca e lista de amigos. */
+/** Chip "eu: nome #tag" — copia sua identificação pra convidar alguém de fora. */
+function InviteChip() {
+  const { user } = useAuth()
+  const { profile } = useProfile()
+  const [copied, setCopied] = useState(false)
+
+  const username =
+    profile?.username || user?.user_metadata?.username || user?.email?.split('@')[0] || 'jogador'
+  const handle = `${username}${profile?.tag ? ` #${profile.tag}` : ''}`
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(handle)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    } catch {
+      /* clipboard indisponível — ignora */
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      title="Toque para copiar e convidar um amigo"
+      className="flex max-w-[10rem] items-center gap-1.5 rounded-full border border-dashed border-violet-400/50 bg-violet-600/5 px-3 py-2 text-xs font-bold text-violet-600 transition hover:bg-violet-600/15 dark:text-violet-300 sm:max-w-none"
+    >
+      📋
+      <span className="truncate font-mono">{handle}</span>
+      <span className={copied ? 'text-emerald-500' : ''}>{copied ? '✓' : ''}</span>
+    </button>
+  )
+}
+
+/** Página 👥 Amigos — filtros rápidos, favoritos, busca no "+" e status. */
 export default function FriendsPage() {
   const { user } = useAuth()
   const { others } = usePresence()
@@ -38,25 +75,24 @@ export default function FriendsPage() {
     friends,
     incoming,
     outgoing,
+    favorites,
+    favBlocked,
     blocked,
     loading,
     sendRequest,
     accept,
     remove,
+    toggleFavorite,
   } = useFriends()
 
-  const [query, setQuery] = useState('')
-  const [results, setResults] = useState(null)
-  const [searchBusy, setSearchBusy] = useState(false)
-  const [searchMsg, setSearchMsg] = useState('')
+  const [filter, setFilter] = useState('todos')
+  const [listQuery, setListQuery] = useState('')
   const [busyKey, setBusyKey] = useState('')
   const [flash, setFlash] = useState('')
 
   const presenceById = new Map(others.map((o) => [o.id, o.status]))
   const statusOf = (f) => presenceById.get(f.userId) ?? 'offline'
-
-  const groups = { online: [], away: [], offline: [] }
-  friends.forEach((f) => groups[statusOf(f)].push(f))
+  const isFavorite = (f) => favorites.includes(f.userId)
 
   const relationOf = (userId) => {
     if (friends.some((f) => f.userId === userId)) return 'amigo'
@@ -70,60 +106,73 @@ export default function FriendsPage() {
     setFlash('')
     const res = await fn()
     setBusyKey('')
-    setFlash(res?.ok === false ? res.message : successMsg)
+    if (res?.ok === false) setFlash(res.message)
+    else if (successMsg) setFlash(successMsg)
+    return res
   }
 
-  const search = async (e) => {
-    e?.preventDefault()
-    const q = query.trim().replace(/[,()]/g, '')
-    if (q.length < 2) {
-      setSearchMsg('Digite pelo menos 2 caracteres. Dica: #tag exata também funciona (ex.: #0007).')
-      setResults(null)
-      return
-    }
-    setSearchBusy(true)
-    setSearchMsg('')
-    const conditions = [`username.ilike.%${q}%`]
-    const digits = q.replace(/^#/, '')
-    if (/^\d{1,4}$/.test(digits)) conditions.push(`tag.eq.${digits.padStart(4, '0')}`)
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .or(conditions.join(','))
-      .limit(8)
-    if (error) {
-      setSearchMsg(`${translateError(error.message)} — confira se a Migração v4 foi rodada (SETUP.md).`)
-      setResults(null)
-    } else {
-      const list = (data ?? []).filter((p) => p.id !== user.id)
-      setResults(list)
-      if (!list.length) setSearchMsg('Ninguém encontrado. Tente o nome de usuário ou a #tag com 4 dígitos.')
-    }
-    setSearchBusy(false)
+  const onAdd = (p) =>
+    doAction(p.id, () => sendRequest(p.id), `Pedido enviado para ${p.username} ✉️`)
+
+  const onToggleFav = async (f) => {
+    setBusyKey(`fav:${f.userId}`)
+    const res = await toggleFavorite(f.userId)
+    setBusyKey('')
+    if (res?.ok === false) setFlash(res.message)
   }
 
   const removeWithConfirm = (f) => {
-    const label = f.statusLabel ?? f.username
-    if (window.confirm(`Remover ${label} dos seus amigos?`)) {
+    if (window.confirm(`Remover ${f.username} dos seus amigos?`)) {
       doAction(f.userId, () => remove(f.friendshipId), `${f.username} removido dos amigos.`)
     }
+  }
+
+  // filtro rápido + busca na lista
+  const byFilter = friends.filter((f) => {
+    if (filter === 'online') return statusOf(f) !== 'offline'
+    if (filter === 'favoritos') return isFavorite(f)
+    return true
+  })
+  const q = listQuery.trim().toLowerCase()
+  const bySearch = q
+    ? byFilter.filter(
+        (f) => f.username.toLowerCase().includes(q) || (f.tag && f.tag.includes(q.replace('#', '')))
+      )
+    : byFilter
+
+  const groups = { online: [], away: [], offline: [] }
+  bySearch.forEach((f) => groups[statusOf(f)].push(f))
+
+  const counts = {
+    todos: friends.length,
+    online: friends.filter((f) => statusOf(f) !== 'offline').length,
+    favoritos: friends.filter((f) => isFavorite(f)).length,
   }
 
   const groupDefs = [
     { key: 'online', ...PRESENCE_META.online },
     { key: 'away', ...PRESENCE_META.away },
-    { key: 'offline', label: 'Offline', dot: 'bg-zinc-500', emoji: '⚫' },
+    { key: 'offline', label: 'Offline', dot: 'bg-zinc-500', emoji: '💤' },
   ]
 
   return (
     <div className="min-h-screen bg-zinc-100 text-zinc-900 dark:bg-ink-950 dark:text-zinc-50">
       <AppHeader />
       <main className="mx-auto w-full max-w-4xl space-y-6 px-4 py-8">
-        <header>
-          <h1 className="font-display text-2xl font-black tracking-tight">👥 Amigos</h1>
-          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-            Seu círculo, seu status. Ninguém de fora vê quando você está online.
-          </p>
+        {/* header com convite + botão de adicionar */}
+        <header className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="font-display text-2xl font-black tracking-tight">👥 Amigos</h1>
+            <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+              Seu círculo, seu status. Só amigos veem você online.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <InviteChip />
+            {!blocked && (
+              <AddFriendMenu relationOf={relationOf} onAdd={onAdd} busyKey={busyKey} />
+            )}
+          </div>
         </header>
 
         <PresenceControl />
@@ -172,7 +221,11 @@ export default function FriendsPage() {
                             type="button"
                             disabled={busyKey === f.friendshipId}
                             onClick={() =>
-                              doAction(f.friendshipId, () => accept(f.friendshipId), `Você e ${f.username} agora são amigos! 🎉`)
+                              doAction(
+                                f.friendshipId,
+                                () => accept(f.friendshipId),
+                                `Você e ${f.username} agora são amigos! 🎉`
+                              )
                             }
                             className="rounded-xl bg-cyan-500/15 px-3 py-2 text-xs font-bold text-cyan-600 transition hover:bg-cyan-500/25 disabled:opacity-50 dark:text-cyan-300"
                           >
@@ -227,86 +280,60 @@ export default function FriendsPage() {
               </section>
             )}
 
-            {/* busca */}
+            {/* lista de amigos com filtros rápidos */}
             <section className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-soft dark:border-white/10 dark:bg-ink-900">
-              <h2 className="text-sm font-extrabold text-zinc-900 dark:text-zinc-50">
-                ➕ Adicionar amigo
-              </h2>
-              <form onSubmit={search} className="mt-3 flex gap-2">
-                <input
-                  type="text"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Nome de usuário ou #tag…"
-                  className={INPUT_CLASSES}
-                />
-                <button
-                  type="submit"
-                  disabled={searchBusy}
-                  className="shrink-0 rounded-xl bg-violet-600 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-violet-500 disabled:opacity-50"
-                >
-                  {searchBusy ? 'Buscando…' : 'Buscar'}
-                </button>
-              </form>
-              {searchMsg && (
-                <p className="mt-2.5 text-xs text-zinc-400 dark:text-zinc-500">{searchMsg}</p>
-              )}
-              {results && results.length > 0 && (
-                <ul className="mt-3 divide-y divide-zinc-100 dark:divide-white/5">
-                  {results.map((p) => {
-                    const rel = relationOf(p.id)
-                    return (
-                      <li key={p.id} className="flex items-center gap-3 py-3">
-                        <AvatarStatus name={p.username} status={presenceById.get(p.id) ?? 'offline'} />
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-bold text-zinc-800 dark:text-zinc-100">
-                            {p.username}
-                            {p.tag && <span className="font-mono text-zinc-400"> #{p.tag}</span>}
-                          </p>
-                          <div className="mt-0.5">
-                            <RoleBadge role={p.role} />
-                          </div>
-                        </div>
-                        {rel === 'amigo' && (
-                          <span className="text-xs font-bold text-emerald-500">✓ Já é amigo</span>
-                        )}
-                        {rel === 'enviado' && (
-                          <span className="text-xs font-bold text-zinc-400">Pedido enviado ✉️</span>
-                        )}
-                        {rel === 'recebido' && (
-                          <span className="text-xs font-bold text-cyan-500">Te mandou pedido 📬</span>
-                        )}
-                        {!rel && (
-                          <button
-                            type="button"
-                            disabled={busyKey === p.id}
-                            onClick={() =>
-                              doAction(p.id, () => sendRequest(p.id), `Pedido enviado para ${p.username} ✉️`)
-                            }
-                            className="rounded-xl bg-violet-600 px-3.5 py-2 text-xs font-bold text-white transition hover:bg-violet-500 disabled:opacity-50"
-                          >
-                            Adicionar
-                          </button>
-                        )}
-                      </li>
-                    )
-                  })}
-                </ul>
-              )}
-            </section>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h2 className="text-sm font-extrabold text-zinc-900 dark:text-zinc-50">
+                  💙 Seus amigos
+                </h2>
+                {/* busca na lista */}
+                {friends.length > 4 && (
+                  <input
+                    type="text"
+                    value={listQuery}
+                    onChange={(e) => setListQuery(e.target.value)}
+                    placeholder="Filtrar por nome…"
+                    className="w-40 rounded-xl border border-zinc-200 bg-transparent px-3 py-1.5 text-xs text-zinc-700 placeholder-zinc-400 outline-none transition focus:border-violet-500 dark:border-white/10 dark:text-zinc-200"
+                  />
+                )}
+              </div>
 
-            {/* lista de amigos */}
-            <section className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-soft dark:border-white/10 dark:bg-ink-900">
-              <h2 className="text-sm font-extrabold text-zinc-900 dark:text-zinc-50">
-                💙 Seus amigos ({friends.length})
-              </h2>
+              {/* chips de filtro rápido */}
+              <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+                {FILTERS.map((f) => (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={() => setFilter(f.id)}
+                    className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-bold transition ${
+                      filter === f.id
+                        ? 'border-violet-500/60 bg-violet-600/10 text-violet-600 dark:text-violet-300'
+                        : 'border-zinc-200 text-zinc-500 hover:border-violet-400/50 hover:text-zinc-700 dark:border-white/10 dark:text-zinc-400 dark:hover:text-zinc-200'
+                    }`}
+                  >
+                    {f.id === 'online' && <span className="h-2 w-2 rounded-full bg-emerald-500" />}
+                    {f.id === 'favoritos' && <span className="text-amber-400">★</span>}
+                    {f.label}
+                    <span className="rounded-full bg-zinc-100 px-1.5 text-[10px] text-zinc-500 dark:bg-white/10 dark:text-zinc-400">
+                      {counts[f.id]}
+                    </span>
+                  </button>
+                ))}
+              </div>
+
               {friends.length === 0 ? (
-                <div className="py-8 text-center">
+                <div className="py-10 text-center">
                   <p className="text-3xl">🌱</p>
                   <p className="mt-2 text-xs text-zinc-400 dark:text-zinc-500">
-                    Nenhum amigo ainda. Use a busca acima e chame a galera pra criar contas!
+                    Nenhum amigo ainda — toque no <strong>+</strong> ali em cima para buscar, ou
+                    copie sua identificação e mande pra alguém te adicionar.
                   </p>
                 </div>
+              ) : bySearch.length === 0 ? (
+                <p className="py-8 text-center text-xs text-zinc-400 dark:text-zinc-500">
+                  Nada por aqui com esse filtro{q ? ' + busca' : ''}{' '}
+                  {filter === 'favoritos' && '— toque na ⭐ de um amigo para favoritar.'}
+                </p>
               ) : (
                 <div className="mt-4 space-y-5">
                   {groupDefs.map((g) =>
@@ -314,32 +341,72 @@ export default function FriendsPage() {
                       <div key={g.key}>
                         <h3 className="flex items-center gap-2 text-xs font-bold text-zinc-400 dark:text-zinc-500">
                           <span className={`h-2 w-2 rounded-full ${g.dot}`} />
-                          {g.emoji === '⚫' ? '💤' : g.emoji} {g.label} ({groups[g.key].length})
+                          {g.emoji} {g.label} ({groups[g.key].length})
                         </h3>
-                        <ul className="mt-2 space-y-2.5">
-                          {groups[g.key].map((f) => (
-                            <li
-                              key={f.friendshipId}
-                              className="flex items-center gap-3 rounded-2xl px-2 py-2 transition hover:bg-zinc-50 dark:hover:bg-white/5"
-                            >
-                              <AvatarStatus name={f.username} status={statusOf(f)} />
-                              <div className="min-w-0 flex-1">
-                                <p className="truncate text-sm font-bold text-zinc-800 dark:text-zinc-100">
-                                  {f.username}
-                                  {f.tag && <span className="font-mono text-zinc-400"> #{f.tag}</span>}
-                                </p>
-                                <RoleBadge role={f.role} />
-                              </div>
-                              <button
-                                type="button"
-                                disabled={busyKey === f.userId}
-                                onClick={() => removeWithConfirm(f)}
-                                className={`${GHOST_BTN} hover:text-rose-500`}
+                        <ul className="mt-2 space-y-1">
+                          {groups[g.key].map((f) => {
+                            const fav = isFavorite(f)
+                            return (
+                              <li
+                                key={f.friendshipId}
+                                className="flex items-center gap-2.5 rounded-2xl px-2 py-2 transition hover:bg-zinc-50 sm:gap-3 dark:hover:bg-white/5"
                               >
-                                Remover
-                              </button>
-                            </li>
-                          ))}
+                                <AvatarStatus name={f.username} status={statusOf(f)} />
+                                <div className="min-w-0 flex-1">
+                                  <p className="truncate text-sm font-bold text-zinc-800 dark:text-zinc-100">
+                                    {f.username}
+                                    {f.tag && (
+                                      <span className="font-mono text-zinc-400"> #{f.tag}</span>
+                                    )}
+                                  </p>
+                                  <RoleBadge role={f.role} />
+                                </div>
+
+                                {/* ações */}
+                                <button
+                                  type="button"
+                                  title="Chat com amigos chegando em breve 💬"
+                                  disabled
+                                  className="rounded-xl px-2 py-2 text-sm opacity-30"
+                                >
+                                  💬
+                                </button>
+                                <button
+                                  type="button"
+                                  title={fav ? 'Remover dos favoritos' : 'Marcar como favorito'}
+                                  disabled={busyKey === `fav:${f.userId}`}
+                                  onClick={() => onToggleFav(f)}
+                                  className={`rounded-xl px-2 py-2 text-base transition active:scale-90 disabled:opacity-40 ${
+                                    fav
+                                      ? 'text-amber-400'
+                                      : favBlocked
+                                        ? 'text-zinc-200 dark:text-zinc-700'
+                                        : 'text-zinc-300 hover:text-amber-400 dark:text-zinc-600'
+                                  }`}
+                                >
+                                  ★
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={busyKey === f.userId}
+                                  onClick={() => removeWithConfirm(f)}
+                                  className={`${GHOST_BTN} hidden hover:text-rose-500 sm:inline-flex`}
+                                >
+                                  Remover
+                                </button>
+                                {/* remover no mobile: ícone compacto */}
+                                <button
+                                  type="button"
+                                  title="Remover amigo"
+                                  disabled={busyKey === f.userId}
+                                  onClick={() => removeWithConfirm(f)}
+                                  className="rounded-xl px-2 py-2 text-sm text-zinc-400 transition hover:text-rose-500 sm:hidden"
+                                >
+                                  ✕
+                                </button>
+                              </li>
+                            )
+                          })}
                         </ul>
                       </div>
                     ) : null
