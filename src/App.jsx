@@ -3,7 +3,9 @@ import AuthPage from './pages/AuthPage'
 import ResetPassword from './pages/ResetPassword'
 import Lobby from './pages/Lobby'
 import ProfilePage from './pages/ProfilePage'
+import AdminPage from './pages/AdminPage'
 import ProtectedRoute from './components/ProtectedRoute'
+import RequireAdm from './components/RequireAdm'
 
 export default function App() {
   return (
@@ -23,6 +25,16 @@ export default function App() {
         element={
           <ProtectedRoute>
             <ProfilePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin"
+        element={
+          <ProtectedRoute>
+            <RequireAdm>
+              <AdminPage />
+            </RequireAdm>
           </ProtectedRoute>
         }
       />

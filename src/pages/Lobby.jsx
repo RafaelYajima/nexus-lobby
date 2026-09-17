@@ -1,6 +1,7 @@
 import AppHeader from '../components/AppHeader'
 import HeroCarousel from '../components/lobby/HeroCarousel'
 import GameCard from '../components/lobby/GameCard'
+import { useAuth } from '../context/AuthContext'
 import { useProfile } from '../hooks/useProfile'
 import { GAMES } from '../data/games'
 
@@ -16,9 +17,11 @@ function getGreeting() {
  * Lobby: vitrine de jogos. Configurações e perfil vivem em /perfil.
  */
 export default function Lobby() {
+  const { user } = useAuth()
   const { profile } = useProfile()
 
-  const username = profile?.username || 'jogador'
+  const username =
+    profile?.username || user?.user_metadata?.username || user?.email?.split('@')[0] || 'jogador'
 
   const scrollToGames = () => {
     document.getElementById('jogos')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
