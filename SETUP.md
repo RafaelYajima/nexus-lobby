@@ -391,6 +391,68 @@ select * from public.friend_favorites;  -- (vazio no começo)
 
 Sem a v5: o app funciona normal, só as estrelinhas ⭐ avisam "rode a Migração v5".
 
+## 💬 Migração v6 — Chat direto entre amigos
+
+Mensagens 1:1 persistidas, com entrega instantânea via Realtime. Só é possível conversar com amizade **aceita** (RLS bloqueia pro resto). Cada usuário só vê conversas em que participa.
+
+```sql
+-- ========================================================
+-- MIGRAÇÃO v6 — Chat direto (idempotente)
+-- ========================================================
+
+create table if not exists public.direct_messages (
+  id           bigint generated always as identity primary key,
+  sender_id    uuid not null references auth.users (id) on delete cascade,
+  recipient_id uuid not null references auth.users (id) on delete cascade,
+  content      text not null check (char_length(content) between 1 and 1000),
+  created_at   timestamptz not null default now()
+);
+
+create index if not exists dm_par_ordenado on public.direct_messages (
+  least(sender_id, recipient_id), greatest(sender_id, recipient_id), created_at desc
+);
+
+alter table public.direct_messages enable row level security;
+
+drop policy if exists "ve_minhas_mensagens" on public.direct_messages;
+drop policy if exists "envia_para_amigo"    on public.direct_messages;
+
+create policy "ve_minhas_mensagens" on public.direct_messages
+  for select using (sender_id = auth.uid() or recipient_id = auth.uid());
+
+create policy "envia_para_amigo" on public.direct_messages
+  for insert with check (
+    sender_id = auth.uid()
+    and exists (
+      select 1 from public.friendships f
+      where f.status = 'accepted'
+        and ((f.requester = auth.uid() and f.addressee = recipient_id)
+          or (f.addressee = auth.uid() and f.requester = recipient_id))
+    )
+  );
+
+-- entrega instantânea (sem refresh): habilita Realtime na tabela
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'direct_messages'
+  ) then
+    alter publication supabase_realtime add table public.direct_messages;
+  end if;
+end $$;
+```
+
+**Verificar:**
+
+```sql
+-- deve conseguir inserir/lendo como usuário logado (teste pelo app é mais fácil 🙂)
+select * from public.direct_messages;
+select tablename from pg_publication_tables where pubname = 'supabase_realtime';
+```
+
+Sem a v6: a página do chat mostra "🔧 O chat ainda não foi ativado" e o resto do app segue normal.
+
 ## 🔑 Sobre a senha do adm (`123`)
 
 - Ela funciona porque foi gravada **direto no banco** (criptografada com bcrypt).

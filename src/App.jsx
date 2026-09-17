@@ -3,6 +3,7 @@ import AuthPage from './pages/AuthPage'
 import ResetPassword from './pages/ResetPassword'
 import Lobby from './pages/Lobby'
 import ProfilePage from './pages/ProfilePage'
+import ChatPage from './pages/ChatPage'
 import AdminPage from './pages/AdminPage'
 import FriendsPage from './pages/FriendsPage'
 import ProtectedRoute from './components/ProtectedRoute'
@@ -34,6 +35,14 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <FriendsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/chat/:friendId"
+            element={
+              <ProtectedRoute>
+                <ChatPage />
               </ProtectedRoute>
             }
           />

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import AppHeader from '../components/AppHeader'
 import Spinner from '../components/Spinner'
 import RoleBadge from '../components/RoleBadge'
@@ -363,14 +364,13 @@ export default function FriendsPage() {
                                 </div>
 
                                 {/* ações */}
-                                <button
-                                  type="button"
-                                  title="Chat com amigos chegando em breve 💬"
-                                  disabled
-                                  className="rounded-xl px-2 py-2 text-sm opacity-30"
+                                <Link
+                                  to={`/chat/${f.userId}`}
+                                  title={`Conversar com ${f.username}`}
+                                  className="rounded-xl px-2 py-2 text-sm transition hover:bg-violet-600/10 active:scale-95"
                                 >
                                   💬
-                                </button>
+                                </Link>
                                 <button
                                   type="button"
                                   title={fav ? 'Remover dos favoritos' : 'Marcar como favorito'}

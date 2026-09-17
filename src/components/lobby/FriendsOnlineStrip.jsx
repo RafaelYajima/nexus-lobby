@@ -39,9 +39,10 @@ export default function FriendsOnlineStrip() {
           const status = presenceById.get(f.userId) ?? 'offline'
           const dot = PRESENCE_META[status]?.dot ?? 'bg-zinc-400'
           return (
-            <span
+            <Link
               key={f.userId}
-              title={`${f.username}${f.tag ? ` #${f.tag}` : ''} — ${PRESENCE_META[status]?.label ?? ''}`}
+              to={`/chat/${f.userId}`}
+              title={`Conversar com ${f.username}${f.tag ? ` #${f.tag}` : ''} — ${PRESENCE_META[status]?.label ?? ''}`}
               className="relative ring-2 ring-white rounded-xl transition-transform hover:z-10 hover:-translate-y-1 dark:ring-ink-950"
             >
               <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-zinc-500 to-zinc-700 text-xs font-black text-white dark:from-zinc-600 dark:to-zinc-800">
@@ -50,7 +51,7 @@ export default function FriendsOnlineStrip() {
               <span
                 className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-white dark:border-ink-950 ${dot}`}
               />
-            </span>
+            </Link>
           )
         })}
         {extra > 0 && (
