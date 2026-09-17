@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useCallback } from 'react'
+import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient'
 import { useAuth } from './AuthContext'
 
@@ -17,7 +17,7 @@ function getInitialTheme() {
 
 export function ThemeProvider({ children }) {
   const { user } = useAuth()
-  const [theme, setTheme] = useState(getInitialTheme)
+  const [theme, setThemeState] = useState(getInitialTheme)
 
   // Aplica a classe no <html> e mantém cópia local (para visitantes).
   useEffect(() => {
@@ -44,7 +44,7 @@ export function ThemeProvider({ children }) {
       .then(({ data, error }) => {
         if (error) console.warn('[tema] Não foi possível ler o perfil:', error.message)
         if (active && (data?.theme === 'dark' || data?.theme === 'light')) {
-          setTheme(data.theme)
+          setThemeState(data.theme) // direto no estado: sem regravar o que acabamos de ler
         }
       })
     return () => {
@@ -52,10 +52,8 @@ export function ThemeProvider({ children }) {
     }
   }, [user])
 
-  const toggleTheme = useCallback(() => {
-    setTheme((prev) => {
-      const next = prev === 'dark' ? 'light' : 'dark'
-      // Persiste no perfil quando há sessão ativa.
+  const persist = useCallback(
+    (next) => {
       if (user && isSupabaseConfigured) {
         supabase
           .from('profiles')
@@ -65,12 +63,32 @@ export function ThemeProvider({ children }) {
             if (error) console.warn('[tema] Não foi possível salvar no perfil:', error.message)
           })
       }
+    },
+    [user]
+  )
+
+  /** Define o tema ('dark' | 'light') e persiste no perfil quando logado. */
+  const setTheme = useCallback(
+    (next) => {
+      if (next !== 'dark' && next !== 'light') return
+      setThemeState((prev) => {
+        if (prev !== next) persist(next)
+        return next
+      })
+    },
+    [persist]
+  )
+
+  const toggleTheme = useCallback(() => {
+    setThemeState((prev) => {
+      const next = prev === 'dark' ? 'light' : 'dark'
+      persist(next)
       return next
     })
-  }, [user])
+  }, [persist])
 
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme }}>
+    <ThemeContext.Provider value={{ theme, setTheme, toggleTheme }}>
       {children}
     </ThemeContext.Provider>
   )

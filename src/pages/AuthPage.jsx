@@ -130,8 +130,7 @@ export default function AuthPage() {
     }
     if (view !== 'forgot') {
       // No cadastro a API do Supabase exige 6+ caracteres.
-      // No login quem valida é o servidor, então só exigimos campo preenchido
-      // (a senha inicial do adm, por exemplo, tem menos de 6).
+      // No login quem valida é o servidor, então só exigimos campo preenchido.
       if (view === 'signup' && form.password.length < 6) errors.password = 'Mínimo de 6 caracteres.'
       if (view === 'signin' && form.password.length === 0) errors.password = 'Informe sua senha.'
       if (view === 'signup' && form.confirm !== form.password) {
@@ -221,14 +220,14 @@ export default function AuthPage() {
 
           {/* Cartão */}
           <div className="rounded-3xl border border-zinc-200/80 bg-white/85 p-6 shadow-2xl shadow-zinc-900/10 backdrop-blur-xl sm:p-8 dark:border-white/10 dark:bg-white/[0.04] dark:shadow-black/50">
-            {/* Status da conexão com o Supabase (útil em desenvolvimento) */}
-            {isSupabaseConfigured ? (
+            {/* Status da conexão com o Supabase (visível apenas em desenvolvimento) */}
+            {import.meta.env.DEV && (isSupabaseConfigured ? (
               <div className="mb-5 flex items-center gap-2.5 rounded-xl border border-emerald-300/60 bg-emerald-50 p-3 text-xs font-medium text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-400/10 dark:text-emerald-300">
                 <span className="relative flex h-2 w-2">
                   <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
                   <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
                 </span>
-                Conectado ao Supabase · projeto <span className="font-mono font-semibold">uokiymibeudovkksvxxz</span>
+                Conectado ao Supabase
               </div>
             ) : (
               <div className="mb-5 rounded-xl border border-amber-300/60 bg-amber-50 p-3.5 text-xs leading-relaxed text-amber-800 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-300">
@@ -380,11 +379,6 @@ export default function AuthPage() {
             © 2026 NEXUS · Feito para jogadores
           </p>
         </div>
-      </main>
-    </div>
-  )
-}
->
       </main>
     </div>
   )

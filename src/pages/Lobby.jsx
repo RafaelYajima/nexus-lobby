@@ -1,44 +1,22 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { useTheme } from '../context/ThemeContext'
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient'
 import Logo from '../components/Logo'
 import ThemeToggle from '../components/ThemeToggle'
 import Spinner from '../components/Spinner'
+import RoleBadge from '../components/RoleBadge'
+import HeroCarousel from '../components/lobby/HeroCarousel'
+import GameCard from '../components/lobby/GameCard'
+import ProfileCard from '../components/lobby/ProfileCard'
+import SettingsCard from '../components/lobby/SettingsCard'
+import { GAMES } from '../data/games'
 
-const GAMES = [
-  { id: 'brawl', name: 'Arena Brawl', desc: 'Batalhas PvP em tempo real', emoji: '⚔️', accent: 'from-violet-600 to-fuchsia-500', tag: 'PvP' },
-  { id: 'racing', name: 'Corrida Neon', desc: 'Velocidade pura em pistas futuristas', emoji: '🏎️', accent: 'from-cyan-500 to-blue-600', tag: 'Corrida' },
-  { id: 'tower', name: 'Torre Mística', desc: 'RPG de estratégia por andares', emoji: '🏰', accent: 'from-emerald-500 to-cyan-500', tag: 'RPG' },
-  { id: 'quiz', name: 'Quiz Relâmpago', desc: 'Perguntas rápidas, ranking global', emoji: '⚡', accent: 'from-amber-500 to-rose-500', tag: 'Casual' },
+const NAV_ITEMS = [
+  { label: 'Lobby', active: true },
+  { label: 'Loja', active: false },
+  { label: 'Ranking', active: false },
+  { label: 'Comunidade', active: false },
 ]
-
-/** Estilos do selo de cada papel */
-const ROLE_STYLES = {
-  adm: {
-    label: 'ADMIN',
-    className:
-      'border border-fuchsia-400/50 bg-gradient-to-r from-violet-600 to-fuchsia-500 text-white shadow-neon-violet',
-  },
-  mod: {
-    label: 'MOD',
-    className: 'border border-cyan-500/50 bg-cyan-500/10 text-cyan-600 dark:text-cyan-300',
-  },
-  user: {
-    label: 'JOGADOR',
-    className: 'border border-zinc-400/40 bg-zinc-500/10 text-zinc-500 dark:text-zinc-400',
-  },
-}
-
-function RoleBadge({ role, size = 'md' }) {
-  const style = ROLE_STYLES[role] ?? ROLE_STYLES.user
-  const sizing = size === 'sm' ? 'px-1.5 py-px text-[9px]' : 'px-2 py-0.5 text-[10px]'
-  return (
-    <span className={`inline-flex items-center rounded-md font-bold tracking-widest ${sizing} ${style.className}`}>
-      {style.label}
-    </span>
-  )
-}
 
 const IconLogout = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -48,9 +26,16 @@ const IconLogout = () => (
   </svg>
 )
 
+function getGreeting() {
+  const h = new Date().getHours()
+  if (h < 6) return 'Boa madrugada'
+  if (h < 12) return 'Bom dia'
+  if (h < 18) return 'Boa tarde'
+  return 'Boa noite'
+}
+
 export default function Lobby() {
   const { user, signOut } = useAuth()
-  const { theme } = useTheme()
   const [profile, setProfile] = useState(null)
   const [profileLoading, setProfileLoading] = useState(true)
   const [signingOut, setSigningOut] = useState(false)
@@ -87,7 +72,7 @@ export default function Lobby() {
     if (!raw) return '—'
     return new Intl.DateTimeFormat('pt-BR', {
       day: '2-digit',
-      month: 'long',
+      month: 'short',
       year: 'numeric',
     }).format(new Date(raw))
   }, [profile, user])
@@ -98,14 +83,43 @@ export default function Lobby() {
     // Sem sessão, o ProtectedRoute redireciona para /login automaticamente.
   }
 
+  const scrollToGames = () => {
+    document.getElementById('jogos')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
   return (
     <div className="relative min-h-screen bg-zinc-100 dark:bg-ink-950">
+      {/* textura de fundo */}
+      <div className="pointer-events-none absolute inset-0 bg-grid [mask-image:radial-gradient(ellipse_at_top,black_20%,transparent_70%)]" aria-hidden="true" />
+      <div className="pointer-events-none absolute -top-24 left-1/2 h-80 w-80 -translate-x-1/2 rounded-full bg-violet-500/15 blur-[120px]" aria-hidden="true" />
+
       {/* Header */}
       <header className="sticky top-0 z-30 border-b border-zinc-200/70 bg-white/75 backdrop-blur-xl dark:border-white/5 dark:bg-ink-950/75">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
-          <div className="flex items-center gap-3">
-            <Logo size={34} withGlow={false} />
-            <span className="text-lg font-black tracking-[0.18em] text-zinc-900 dark:text-white">NEXUS</span>
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6">
+          <div className="flex items-center gap-8">
+            <div className="flex items-center gap-3">
+              <Logo size={34} withGlow={false} />
+              <span className="text-lg font-black tracking-[0.18em] text-zinc-900 dark:text-white">
+                NEXUS
+              </span>
+            </div>
+
+            {/* nav principal */}
+            <nav className="hidden items-center gap-1 md:flex" aria-label="Navegação principal">
+              {NAV_ITEMS.map((item) => (
+                <span
+                  key={item.label}
+                  title={item.active ? undefined : 'Em breve'}
+                  className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors ${
+                    item.active
+                      ? 'bg-violet-500/10 text-violet-600 dark:bg-violet-400/10 dark:text-violet-300'
+                      : 'cursor-not-allowed text-zinc-400 hover:text-zinc-500 dark:text-zinc-600 dark:hover:text-zinc-500'
+                  }`}
+                >
+                  {item.label}
+                </span>
+              ))}
+            </nav>
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3">
@@ -119,7 +133,9 @@ export default function Lobby() {
                   {username}
                   {role !== 'user' && <RoleBadge role={role} size="sm" />}
                 </p>
-                <p className="max-w-[180px] truncate text-[11px] text-zinc-400 dark:text-zinc-500">{user?.email}</p>
+                <p className="max-w-[160px] truncate text-[11px] text-zinc-400 dark:text-zinc-500">
+                  {user?.email}
+                </p>
               </div>
             </div>
             <button
@@ -136,126 +152,56 @@ export default function Lobby() {
       </header>
 
       {/* Conteúdo */}
-      <main className="relative mx-auto max-w-6xl px-4 pb-16 pt-10 sm:px-6">
-        <div className="pointer-events-none absolute -top-10 left-1/2 -z-0 h-72 w-72 -translate-x-1/2 rounded-full bg-violet-500/15 blur-[110px]" aria-hidden="true" />
-
-        <section className="relative">
-          <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-violet-500 dark:text-violet-400">
-            Lobby {role === 'adm' && <RoleBadge role="adm" size="sm" />} {role === 'mod' && <RoleBadge role="mod" size="sm" />}
-          </p>
-          <h1 className="mt-2 text-3xl font-black tracking-tight text-zinc-900 sm:text-4xl dark:text-white">
-            Olá, <span className="text-gradient">{username}</span> 👋
-          </h1>
-          <p className="mt-2 max-w-xl text-sm text-zinc-500 dark:text-zinc-400">
-            Este é o seu lobby. Os jogos abaixo ainda estão em construção — e é aqui que vamos
-            transformá-los em algo épico nas próximas etapas.
-          </p>
+      <main className="relative mx-auto max-w-7xl px-4 pb-16 pt-8 sm:px-6">
+        {/* saudação */}
+        <section className="mb-6 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p className="text-sm text-zinc-400 dark:text-zinc-500">{getGreeting()},</p>
+            <h1 className="mt-0.5 text-3xl font-black tracking-tight text-zinc-900 sm:text-4xl dark:text-white">
+              <span className="text-gradient">{username}</span> 👋
+            </h1>
+          </div>
+          <p className="text-sm text-zinc-400 dark:text-zinc-500">O que vamos jogar hoje?</p>
         </section>
 
-        {/* Grid de jogos (placeholders) */}
-        <section className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {GAMES.map((game) => (
-            <div
-              key={game.id}
-              className="group relative overflow-hidden rounded-2xl border border-zinc-200 bg-white p-5 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl dark:border-white/10 dark:bg-white/[0.04] dark:hover:border-white/20 dark:hover:shadow-neon-violet"
-            >
-              <div
-                className={`mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-gradient-to-br text-2xl ${game.accent} shadow-lg`}
-              >
-                {game.emoji}
-              </div>
-              <div className="flex items-center gap-2">
-                <h3 className="font-bold text-zinc-900 dark:text-white">{game.name}</h3>
-                <span className="rounded-md bg-zinc-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-500 dark:bg-white/10 dark:text-zinc-400">
-                  {game.tag}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+          {/* coluna principal */}
+          <div className="space-y-10">
+            <HeroCarousel onCta={scrollToGames} />
+
+            <section id="jogos" className="scroll-mt-24">
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="flex items-center gap-2 text-lg font-black tracking-tight text-zinc-900 dark:text-white">
+                  <span aria-hidden="true">🕹️</span> Jogos em destaque
+                </h2>
+                <span className="text-xs font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
+                  {GAMES.length} títulos
                 </span>
               </div>
-              <p className="mt-1 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">{game.desc}</p>
-              <button
-                type="button"
-                disabled
-                className="mt-4 w-full cursor-not-allowed rounded-lg border border-dashed border-zinc-300 py-2 text-xs font-semibold uppercase tracking-widest text-zinc-400 dark:border-white/15 dark:text-zinc-500"
-              >
-                Em breve
-              </button>
-            </div>
-          ))}
-        </section>
-
-        {/* Perfil */}
-        <section className="mt-10 grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <div className="rounded-2xl border border-zinc-200 bg-white p-6 lg:col-span-2 dark:border-white/10 dark:bg-white/[0.04]">
-            <h2 className="text-sm font-bold uppercase tracking-[0.14em] text-zinc-400 dark:text-zinc-500">
-              Seu perfil
-            </h2>
-            {profileLoading ? (
-              <div className="mt-6 flex justify-center">
-                <Spinner className="h-6 w-6 text-violet-500" />
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {GAMES.map((game) => (
+                  <GameCard key={game.id} game={game} />
+                ))}
               </div>
-            ) : (
-              <dl className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2">
-                <div>
-                  <dt className="text-[11px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
-                    Nome de usuário
-                  </dt>
-                  <dd className="mt-1 font-semibold text-zinc-900 dark:text-white">{username}</dd>
-                </div>
-                <div>
-                  <dt className="text-[11px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
-                    E-mail
-                  </dt>
-                  <dd className="mt-1 break-all font-semibold text-zinc-900 dark:text-white">{user?.email}</dd>
-                </div>
-                <div>
-                  <dt className="text-[11px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
-                    Tipo de conta
-                  </dt>
-                  <dd className="mt-1.5">
-                    <RoleBadge role={role} />
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-[11px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
-                    Membro desde
-                  </dt>
-                  <dd className="mt-1 font-semibold text-zinc-900 dark:text-white">{memberSince}</dd>
-                </div>
-                <div>
-                  <dt className="text-[11px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
-                    Tema preferido
-                  </dt>
-                  <dd className="mt-1 font-semibold text-zinc-900 dark:text-white">
-                    {theme === 'dark' ? '🌙 Escuro' : '☀️ Claro'}
-                  </dd>
-                </div>
-              </dl>
-            )}
-            <p className="mt-5 rounded-xl bg-violet-500/5 p-3 text-[11px] leading-relaxed text-zinc-400 dark:bg-violet-400/5 dark:text-zinc-500">
-              💡 O tema escolhido é salvo automaticamente no seu perfil — em qualquer dispositivo que
-              você entrar, o NEXUS estará do seu jeito.
-            </p>
+            </section>
           </div>
 
-          <div className="flex flex-col justify-between rounded-2xl border border-violet-500/25 bg-gradient-to-br from-violet-600/10 to-cyan-500/10 p-6 dark:border-violet-400/20">
-            <div>
-              <h2 className="text-sm font-bold uppercase tracking-[0.14em] text-violet-500 dark:text-violet-300">
-                Próximos passos
-              </h2>
-              <ul className="mt-4 space-y-2.5 text-sm text-zinc-600 dark:text-zinc-300">
-                {role === 'adm' && (
-                  <li className="flex items-start gap-2"><span>🛡️</span> Painel admin: gerenciar mods e jogadores</li>
-                )}
-                <li className="flex items-start gap-2"><span>🎮</span> Criar salas de jogo públicas e privadas</li>
-                <li className="flex items-start gap-2"><span>💬</span> Chat em tempo real no lobby</li>
-                <li className="flex items-start gap-2"><span>🏆</span> Ranking e histórico de partidas</li>
-                <li className="flex items-start gap-2"><span>👥</span> Sistema de amigos e convites</li>
-              </ul>
-            </div>
-            <p className="mt-6 text-[11px] text-zinc-400 dark:text-zinc-500">
-              Roadmap sujeito ao seu feedback, chefia. 🚀
-            </p>
-          </div>
-        </section>
+          {/* coluna lateral: perfil + configurações */}
+          <aside className="space-y-6 lg:sticky lg:top-24 lg:self-start">
+            <ProfileCard
+              username={username}
+              email={user?.email}
+              role={role}
+              memberSince={memberSince}
+              loading={profileLoading}
+            />
+            <SettingsCard />
+          </aside>
+        </div>
+
+        <footer className="mt-14 border-t border-zinc-200/70 pt-6 text-center text-xs text-zinc-400 dark:border-white/5 dark:text-zinc-600">
+          © 2026 NEXUS · Feito para jogadores 🎮
+        </footer>
       </main>
     </div>
   )

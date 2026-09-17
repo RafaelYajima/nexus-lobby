@@ -47,3 +47,18 @@ input::-ms-reveal,
 input::-ms-clear {
   display: none;
 }
+
+/* Cor de seleção combinando com a identidade */
+::selection {
+  background: rgba(168, 85, 247, 0.35);
+}
+
+/* Acessibilidade: "Reduzir animações" (configurações do lobby) */
+.reduce-motion *,
+.reduce-motion *::before,
+.reduce-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
