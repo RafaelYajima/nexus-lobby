@@ -1,35 +1,39 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient'
 import { useAuth } from '../context/AuthContext'
-import { QUESTIONS, ROUND_COUNT } from '../data/quizQuestions'
 import { playQuizCorrect, playQuizWrong, playQuizFinish } from '../lib/sound'
 
-/** Duração da rodada (ms) e folguinha de rede antes de avançar por timeout. */
 export const QUESTION_TIME_MS = 10000
+export const QUESTION_TIME_S = 10
+export const ROUND_COUNT = 8
 const GRACE_MS = 500
 
-const qById = Object.fromEntries(QUESTIONS.map((q) => [q.id, q]))
-
-/** 10 pts pelo acerto + até 5 de bônus de rapidez (linear nos 10s). */
-export function pointsFor(correct, elapsedMs) {
-  if (!correct) return 0
-  const frac = Math.max(0, Math.min(1, 1 - elapsedMs / QUESTION_TIME_MS))
-  return 10 + Math.round(5 * frac)
-}
+/** Erro de “função inexistente” → Migração v12 pendente. */
+const isMissingFn = (error) =>
+  error?.code === 'PGRST202' || /function public\.quiz_/i.test(error?.message || '')
 
 /**
- * ⚡ Quiz Relâmpago na sala (Migração v11).
- * Estado mora no Supabase: quiz_games (rodada atual) + quiz_answers (placar).
- * Avanço de rodada = update condicional ("só se ainda estiver na rodada X"):
- * qualquer cliente tenta, só o primeiro consegue → sem host fantasma.
+ * ⚡ Quiz Relâmpago v12 — correção NO BANCO.
+ *
+ * As perguntas/gabarito moram em public.quiz_questions (RLS sem policy de leitura:
+ * só as funções security-definer abrem). O jogo inteiro é dirigido por RPC:
+ *   quiz_start   → sorteia 8 perguntas e cria a partida (snapshot sem gabarito)
+ *   quiz_answer  → valida tempo no CLOCK DO SERVIDOR, corrige, pontua e grava
+ *   quiz_advance → avança rodada/finaliza (quem avança primeiro vence, sem dono)
+ *   quiz_reveal  → entrega o gabarito da rodada APÓS ela passar (ou fim da partida)
+ *
+ * O cliente nunca mais insere/atualiza direto nas tabelas nem recebe gabarito
+ * — só o snapshot de perguntas+opções (questions jsonb, sem resposta).
  */
 export function useQuizGame(roomId, membersCount) {
   const { user } = useAuth()
   const [game, setGame] = useState(null) // partida ativa (status 'active')
   const [lastFinished, setLastFinished] = useState(null) // última encerrada
-  const [answers, setAnswers] = useState([]) // respostas do jogo em foco
+  const [answers, setAnswers] = useState([]) // respostas do jogo em foco (stream)
+  const [myAnswers, setMyAnswers] = useState({}) // "gameId:idx" → {chosen, correct, points, answerIndex}
+  const [reveals, setReveals] = useState({}) // "gameId:idx" → índice da correta
   const [loading, setLoading] = useState(true)
-  const [blocked, setBlocked] = useState(false) // v11 pendente
+  const [blocked, setBlocked] = useState(false) // v11 pendente (tabelas ausentes)
   const [starting, setStarting] = useState(false)
   const resultSavedFor = useRef(new Set())
   const fanfareFor = useRef(new Set())
@@ -82,12 +86,11 @@ export function useQuizGame(roomId, membersCount) {
       cancelled = true
       supabase.removeChannel(ch)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, roomId])
 
   const currentGameId = game?.id ?? lastFinished?.id ?? null
 
-  // stream de respostas do jogo em foco (ativa ou finalizada — placar ao vivo)
+  // stream de respostas do jogo em foco (placar ao vivo — inserts vêm das RPCs)
   useEffect(() => {
     if (!user || !currentGameId) {
       setAnswers([])
@@ -131,13 +134,14 @@ export function useQuizGame(roomId, membersCount) {
     }
   }, [user, currentGameId])
 
-  // baralho da partida (resolve ids do banco contra o banco local de perguntas)
+  // perguntas = snapshot gravado na partida (texto + opções, SEM gabarito)
   const questions = useMemo(() => {
     const src = game ?? lastFinished
-    return (src?.question_ids ?? []).map((id) => qById[id]).filter(Boolean)
+    const snap = src?.questions
+    return Array.isArray(snap) ? snap : []
   }, [game, lastFinished])
 
-  // quantos já responderam a rodada atual
+  // quantos (e quem) já responderam a rodada atual
   const answeredNow = useMemo(() => {
     if (!game) return new Set()
     return new Set(
@@ -145,37 +149,22 @@ export function useQuizGame(roomId, membersCount) {
     )
   }, [answers, game])
 
-  // ⏱️ avanço de rodada / fim de jogo — update condicional: primeiro que chegar vence
+  // ⏱️ avanço de rodada / fim de jogo: o SERVIDOR decide; o cliente só sugere na hora
   useEffect(() => {
-    if (!game || game.status !== 'active' || questions.length === 0) return undefined
+    if (!game || game.status !== 'active') return undefined
     const started = new Date(game.question_started_at).getTime()
 
     const tick = setInterval(() => {
       const elapsed = Date.now() - started
       const everyoneAnswered = membersCount > 0 && answeredNow.size >= membersCount
-      const timedOut = elapsed >= QUESTION_TIME_MS + GRACE_MS
-      const snapAll = everyoneAnswered && elapsed >= 1200 // respiro pra quem respondeu por último
-      if (!timedOut && !snapAll) return
-
-      const isLast = game.question_idx >= questions.length - 1
-      const patch = isLast
-        ? { status: 'finished', finished_at: new Date().toISOString() }
-        : {
-            question_idx: game.question_idx + 1,
-            question_started_at: new Date().toISOString(),
-          }
-      supabase
-        .from('quiz_games')
-        .update(patch)
-        .eq('id', game.id)
-        .eq('status', 'active')
-        .eq('question_idx', game.question_idx) // se alguém já avançou, este update não casa mais
-        .then(() => {})
+      const due = elapsed >= QUESTION_TIME_MS + GRACE_MS || (everyoneAnswered && elapsed >= 1200)
+      if (!due) return
+      // RPC é security-definer + row-lock: N clientes chamam, o banco avança 1 vez
+      supabase.rpc('quiz_advance', { p_game_id: game.id }).then(() => {})
     }, 400)
 
     return () => clearInterval(tick)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [game?.id, game?.question_idx, answeredNow.size, membersCount, questions.length])
+  }, [game, answeredNow.size, membersCount])
 
   // grava MEU placar final → alimenta o ranking (community_score), idempotente
   useEffect(() => {
@@ -212,23 +201,13 @@ export function useQuizGame(roomId, membersCount) {
     if (!user || starting) return { ok: false, message: 'Criando partida…' }
     setStarting(true)
     try {
-      const pool = [...QUESTIONS]
-      for (let i = pool.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1))
-        ;[pool[i], pool[j]] = [pool[j], pool[i]]
-      }
-      const question_ids = pool.slice(0, ROUND_COUNT).map((q) => q.id)
-      const { error } = await supabase
-        .from('quiz_games')
-        .insert({ room_id: roomId, host_id: user.id, question_ids })
+      const { error } = await supabase.rpc('quiz_start', { p_room_id: roomId })
       if (error) {
-        return {
-          ok: false,
-          message:
-            error.code === '23505'
-              ? 'Já tem partida rolando nesta sala!'
-              : 'Sem permissão para iniciar (veja a Migração v11 no SETUP.md).',
-        }
+        if (isMissingFn(error))
+          return { ok: false, message: 'Rode a Migração v12 (SETUP.md) — correção passou pro banco.' }
+        if (error.code === '23505')
+          return { ok: false, message: 'Já tem partida rolando nesta sala!' }
+        return { ok: false, message: error.message || 'Não foi possível iniciar a partida.' }
       }
       return { ok: true } // a partida chega via Realtime e a tela muda sozinha
     } finally {
@@ -239,27 +218,49 @@ export function useQuizGame(roomId, membersCount) {
   const answer = useCallback(
     async (chosen) => {
       if (!user || !game || game.status !== 'active') return { ok: false }
-      const q = questions[game.question_idx]
-      if (!q) return { ok: false }
-      if (answeredNow.has(user.id)) return { ok: false } // já respondeu
-      const elapsed = Date.now() - new Date(game.question_started_at).getTime()
-      if (elapsed > QUESTION_TIME_MS + GRACE_MS) return { ok: false } // tempo esgotado
-      const correct = chosen === q.a
-      const points = pointsFor(correct, elapsed)
-      if (correct) playQuizCorrect()
-      else playQuizWrong()
-      const { error } = await supabase.from('quiz_answers').insert({
-        game_id: game.id,
-        question_idx: game.question_idx,
-        user_id: user.id,
-        chosen,
-        correct,
-        points,
+      const key = `${game.id}:${game.question_idx}`
+      if (myAnswers[key] || answeredNow.has(user.id)) return { ok: false }
+
+      const { data, error } = await supabase.rpc('quiz_answer', {
+        p_game_id: game.id,
+        p_chosen: chosen,
       })
-      // 23505 = o primeiro insert já valeu (clique duplo / aba gêmea)
-      return error && error.code !== '23505' ? { ok: false } : { ok: true }
+      if (error) {
+        if (isMissingFn(error))
+          return { ok: false, message: 'Rode a Migração v12 (SETUP.md) para responder.' }
+        return { ok: false } // tempo esgotado / rodada virou — o avanço cuida
+      }
+
+      if (data?.correct) playQuizCorrect()
+      else playQuizWrong()
+      setMyAnswers((prev) => ({
+        ...prev,
+        [key]: {
+          chosen,
+          correct: !!data?.correct,
+          points: data?.points ?? 0,
+          answerIndex: data?.answer_index ?? null,
+        },
+      }))
+      return { ok: true }
     },
-    [user, game, questions, answeredNow]
+    [user, game, myAnswers, answeredNow]
+  )
+
+  /** Pede o gabarito de uma rodada já encerrada (ex.: estourei o tempo sem responder). */
+  const reveal = useCallback(
+    async (questionIdx) => {
+      if (!user || !game) return
+      const key = `${game.id}:${questionIdx}`
+      if (reveals[key] != null) return
+      const { data, error } = await supabase.rpc('quiz_reveal', {
+        p_game_id: game.id,
+        p_question_idx: questionIdx,
+      })
+      if (error || data == null) return
+      setReveals((prev) => (prev[key] != null ? prev : { ...prev, [key]: data }))
+    },
+    [user, game, reveals]
   )
 
   return {
@@ -268,10 +269,13 @@ export function useQuizGame(roomId, membersCount) {
     questions,
     answers,
     answeredNow,
+    myAnswers,
+    reveals,
     loading,
     blocked,
     starting,
     start,
     answer,
+    reveal,
   }
 }

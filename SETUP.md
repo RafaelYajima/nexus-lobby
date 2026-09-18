@@ -874,6 +874,322 @@ select username, score from public.community_score order by score desc limit 5;
 - A validação de tempo/pontos é no **cliente** (com um relógio de 10s vindo do servidor). Entre amigos é suficiente; se um dia o ranking virar competição séria, o passo é mover a correção pra um RPC/security definer.
 - Sem a v11: a aba ⚡ Quiz mostra o aviso 🔧 e o resto do app segue normal.
 
+## 🔒 Migração v12 — Correção do Quiz 100% no banco (RPCs)
+
+**Substitui a validação do cliente.** Agora:
+
+- O banco de perguntas (com gabarito) mora na tabela `quiz_questions` — **trancada por RLS**: ninguém lê o gabarito direto; só as funções (security definer) abrem.
+- `quiz_start` / `quiz_answer` / `quiz_advance` / `quiz_reveal` são **RPCs no Postgres**: tempo contado pelo clock do servidor, correção e pontos calculados lá, avanço de rodada serializado com row-lock (n clientes chamam, avança 1 vez).
+- O cliente só recebe o snapshot da partida (pergunta + opções, **sem resposta**) e deixa de inserir/atualizar tabelas direto — as policies de insert/update da v11 são removidas de propósito.
+- Partidas antigas da v11 (sem snapshot) se encerram sozinhas: o cliente chama `quiz_advance` e o banco drena as rodadas até finalizar.
+
+> Pré-requisito: **v11** rodada (esta migração altera tabelas criadas lá).
+
+```sql
+-- ========================================================
+-- MIGRAÇÃO v12 — Quiz server-side (idempotente)
+-- ========================================================
+
+-- 1) Banco de perguntas (gabarito FECHADO) ------------------------------
+create table if not exists public.quiz_questions (
+  id      text primary key,
+  q       text not null,
+  options jsonb not null,
+  answer  integer not null check (answer between 0 and 3)
+);
+
+alter table public.quiz_questions enable row level security;
+-- Sem nenhuma policy de select de propósito:
+-- ninguém lê o gabarito direto; as funções (security definer = dono) leem.
+
+insert into public.quiz_questions (id, q, options, answer) values
+ ('q01','Qual estúdio criou o jogo Minecraft?','["Mojang","Valve","Epic Games","Blizzard"]',0),
+ ('q02','Qual é a capital da Austrália?','["Sydney","Melbourne","Camberra","Perth"]',2),
+ ('q03','Quanto é 7 × 8?','["54","63","48","56"]',3),
+ ('q04','Qual é o maior planeta do Sistema Solar?','["Júpiter","Saturno","Netuno","Terra"]',0),
+ ('q05','Em que ano o Brasil conquistou a 5ª Copa do Mundo?','["1994","1998","2002","2006"]',2),
+ ('q06','Qual destes NÃO é um gás em temperatura ambiente?','["Oxigênio","Hélio","Ferro","Nitrogênio"]',2),
+ ('q07','Quem é o herói jogável da série The Legend of Zelda?','["Zelda","Ganondorf","Tingle","Link"]',3),
+ ('q08','Quantos minutos tem um jogo de futebol, sem acréscimos?','["80","100","90","120"]',2),
+ ('q09','O rio tradicionalmente considerado o mais extenso do mundo fica no…','["Brasil","Egito","China","Estados Unidos"]',0),
+ ('q10','Qual console híbrido a Nintendo lançou em 2017?','["Wii U","Switch","3DS","GameCube"]',1),
+ ('q11','Qual é a raiz quadrada de 144?','["12","14","16","24"]',0),
+ ('q12','Qual elemento químico tem o símbolo O?','["Ósmio","Prata","Ouro","Oxigênio"]',3),
+ ('q13','Quem pintou a Mona Lisa?','["Van Gogh","Picasso","Da Vinci","Monet"]',2),
+ ('q14','No xadrez, qual peça anda em formato de "L"?','["Bispo","Torre","Cavalo","Rainha"]',2),
+ ('q15','Qual é o maior estado do Brasil em extensão territorial?','["Minas Gerais","Amazonas","São Paulo","Pará"]',1),
+ ('q16','Em que ano foi lançado o primeiro iPhone?','["2005","2009","2010","2007"]',3),
+ ('q17','Quanto é 15% de 200?','["20","25","30","45"]',2),
+ ('q18','Quem formulou a teoria da relatividade?','["Isaac Newton","Albert Einstein","Charles Darwin","Nikola Tesla"]',1),
+ ('q19','No futebol, quantos jogadores cada time mantém em campo?','["10","12","9","11"]',3),
+ ('q20','Qual empresa desenvolve o Windows?','["Apple","Google","Microsoft","IBM"]',2),
+ ('q21','Quantos lados tem um hexágono?','["5","6","8","7"]',1),
+ ('q22','Qual país sediou a Copa do Mundo de 2014?','["África do Sul","Rússia","Catar","Brasil"]',3),
+ ('q23','Qual é o estado físico da água em temperatura ambiente?','["Líquido","Gasoso","Sólido","Plasma"]',0),
+ ('q24','Qual destes animais é um mamífero?','["Tubarão","Golfinho","Crocodilo","Água-viva"]',1),
+ ('q25','1000 centímetros equivalem a…','["1 km","10 metros","100 metros","1 metro"]',1),
+ ('q26','Qual é a moeda oficial do Japão?','["Won","Yuan","Dólar","Iene"]',3),
+ ('q27','Qual herói da Marvel carrega um escudo circular?','["Thor","Homem de Ferro","Capitão América","Homem-Aranha"]',2),
+ ('q28','No plano cartesiano, como se chama o eixo horizontal?','["Eixo y","Eixo x","Eixo z","Eixo w"]',1),
+ ('q29','Qual é o planeta mais próximo do Sol?','["Terra","Marte","Mercúrio","Vênus"]',2),
+ ('q30','Em que continente fica o Egito?','["Ásia","Europa","América","África"]',3),
+ ('q31','Em que ano a internet comercial chegou oficialmente ao Brasil?','["1989","1991","1995","1998"]',2),
+ ('q32','Quantas cores tem o arco-íris tradicional?','["5","9","6","7"]',3)
+on conflict (id) do nothing;
+
+-- 2) Snapshot de perguntas na partida (sem gabarito) --------------------
+alter table public.quiz_games add column if not exists questions jsonb;
+
+-- cliente NÃO cria/edita mais nada direto — tudo passa por RPC daqui pra frente
+drop policy if exists "quiz: membro inicia partida" on public.quiz_games;
+drop policy if exists "quiz: membro avanca partida"  on public.quiz_games;
+drop policy if exists "quiz: envio minha resposta"   on public.quiz_answers;
+
+-- 3) quiz_start: sorteia 8 perguntas e cria a partida -------------------
+create or replace function public.quiz_start(p_room_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_ids  jsonb;
+  v_snap jsonb;
+begin
+  if auth.uid() is null
+     or not exists (
+       select 1 from public.room_members m
+       where m.room_id = p_room_id and m.user_id = auth.uid()
+     ) then
+    raise exception 'Voce precisa ser membro da sala para iniciar uma partida.';
+  end if;
+
+  select jsonb_agg(x.id), jsonb_agg(jsonb_build_object('id', x.id, 'q', x.q, 'options', x.options))
+    into v_ids, v_snap
+  from (
+    select id, q, options
+    from public.quiz_questions
+    order by random()
+    limit 8
+  ) x;
+
+  if v_ids is null or jsonb_array_length(v_ids) = 0 then
+    raise exception 'Banco de perguntas vazio — rode a secao 1 da Migracao v12.';
+  end if;
+
+  -- o indice parcial quiz_games_uma_ativa_por_sala (v11) rejeita a 2ª partida
+  insert into public.quiz_games (room_id, host_id, question_ids, questions)
+  values (p_room_id, auth.uid(), v_ids, v_snap);
+end $$;
+
+-- 4) quiz_answer: corrige e pontua com o relogio do servidor ------------
+create or replace function public.quiz_answer(p_game_id uuid, p_chosen integer)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  g         public.quiz_games;
+  v_current public.quiz_answers;
+  v_elapsed integer;
+  v_answer  integer;
+  v_correct boolean;
+  v_points  integer;
+begin
+  if auth.uid() is null then
+    raise exception 'Precisa estar logado para responder.';
+  end if;
+
+  select * into g from public.quiz_games where id = p_game_id for update;
+
+  if not found then
+    raise exception 'Partida nao encontrada.';
+  end if;
+
+  if not exists (
+    select 1 from public.room_members m
+    where m.room_id = g.room_id and m.user_id = auth.uid()
+  ) then
+    raise exception 'Voce nao esta nesta sala.';
+  end if;
+
+  -- ja respondeu esta rodada? devolve o MESMO resultado (clique duplo / aba gemeas)
+  select * into v_current from public.quiz_answers
+   where game_id = g.id and question_idx = g.question_idx and user_id = auth.uid();
+  if found then
+    select qq.answer into v_answer from public.quiz_questions qq
+     where qq.id = (g.question_ids ->> g.question_idx);
+    return jsonb_build_object(
+      'correct', v_current.correct,
+      'points', v_current.points,
+      'answer_index', v_answer,
+      'already', true
+    );
+  end if;
+
+  if g.status <> 'active' then
+    raise exception 'Esta rodada ja encerrou.';
+  end if;
+
+  v_elapsed := (extract(epoch from (now() - g.question_started_at)) * 1000)::integer;
+  if v_elapsed > 10700 then raise exception 'Tempo esgotado.'; end if;
+  if v_elapsed < 0 then v_elapsed := 0; end if; -- relogio do cliente nao importa
+
+  select qq.answer into v_answer from public.quiz_questions qq
+   where qq.id = (g.question_ids ->> g.question_idx);
+
+  v_correct := coalesce(v_answer, -1) = p_chosen;
+  v_points := case when v_correct
+    then 10 + round(5 * greatest(least(1 - v_elapsed / 10000.0, 1), 0))::integer
+    else 0
+  end;
+
+  insert into public.quiz_answers (game_id, question_idx, user_id, chosen, correct, points)
+  values (g.id, g.question_idx, auth.uid(), p_chosen, v_correct, v_points);
+
+  return jsonb_build_object(
+    'correct', v_correct,
+    'points', v_points,
+    'answer_index', v_answer, -- apos travar a sua, ve qual era a certa
+    'already', false
+  );
+end $$;
+
+-- 5) quiz_advance: avanca rodada / finaliza (row-lock, sem dono) --------
+create or replace function public.quiz_advance(p_game_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  g        public.quiz_games;
+  v_elapsed integer;
+  v_answered integer;
+  v_members  integer;
+  v_total    integer;
+begin
+  if auth.uid() is null then
+    raise exception 'Precisa estar logado.';
+  end if;
+
+  select * into g from public.quiz_games where id = p_game_id for update;
+
+  if not found then raise exception 'Partida nao encontrada.'; end if;
+
+  if not exists (
+    select 1 from public.room_members m
+    where m.room_id = g.room_id and m.user_id = auth.uid()
+  ) then
+    raise exception 'Voce nao esta nesta sala.';
+  end if;
+
+  if g.status <> 'active' then
+    return jsonb_build_object('moved', false, 'reason', 'ja encerrou');
+  end if;
+
+  v_elapsed := (extract(epoch from (now() - g.question_started_at)) * 1000)::integer;
+
+  select count(distinct a.user_id) into v_answered
+  from public.quiz_answers a
+  where a.game_id = g.id and a.question_idx = g.question_idx;
+
+  select count(*) into v_members
+  from public.room_members m where m.room_id = g.room_id;
+
+  v_total := case
+    when g.questions is not null and jsonb_array_length(g.questions) > 0
+      then jsonb_array_length(g.questions)
+    else coalesce(jsonb_array_length(g.question_ids), 0) -- partidas da v11
+  end;
+
+  -- ainda nao e hora? (10s de prazo, ou todos responderam apos 1,2s)
+  if v_elapsed <= 10500
+     and not (v_members > 0 and v_answered >= v_members and v_elapsed >= 1200) then
+    return jsonb_build_object('moved', false, 'reason', 'cedo');
+  end if;
+
+  if v_total = 0 or g.question_idx + 1 >= v_total then
+    update public.quiz_games set status = 'finished', finished_at = now() where id = g.id;
+    return jsonb_build_object('moved', true, 'finished', true);
+  end if;
+
+  update public.quiz_games
+     set question_idx = g.question_idx + 1, question_started_at = now()
+   where id = g.id;
+  return jsonb_build_object('moved', true, 'finished', false);
+end $$;
+
+-- 6) quiz_reveal: gabarito de rodada JA encerrada (ou fim da partida) ---
+create or replace function public.quiz_reveal(p_game_id uuid, p_question_idx integer)
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  g        public.quiz_games;
+  v_elapsed integer;
+  v_ok     boolean;
+begin
+  if auth.uid() is null then
+    raise exception 'Precisa estar logado.';
+  end if;
+
+  select * into g from public.quiz_games where id = p_game_id;
+  if not found then raise exception 'Partida nao encontrada.'; end if;
+
+  if not exists (
+    select 1 from public.room_members m
+    where m.room_id = g.room_id and m.user_id = auth.uid()
+  ) then
+    raise exception 'Voce nao esta nesta sala.';
+  end if;
+
+  v_elapsed := (extract(epoch from (now() - g.question_started_at)) * 1000)::integer;
+  v_ok := g.status <> 'active'
+          or p_question_idx < g.question_idx
+          or (p_question_idx = g.question_idx and v_elapsed > 10700);
+  if not v_ok then
+    raise exception 'Ainda nao pode revelar essa pergunta.';
+  end if;
+
+  return (
+    select qq.answer from public.quiz_questions qq
+    where qq.id = (g.question_ids ->> p_question_idx)
+  );
+end $$;
+
+-- 7) Tranca as RPCs: só usuários logados --------------------------------
+revoke all on function public.quiz_start(uuid)            from public;
+revoke all on function public.quiz_answer(uuid, integer)  from public;
+revoke all on function public.quiz_advance(uuid)          from public;
+revoke all on function public.quiz_reveal(uuid, integer)  from public;
+grant execute on function public.quiz_start(uuid)            to authenticated;
+grant execute on function public.quiz_answer(uuid, integer)  to authenticated;
+grant execute on function public.quiz_advance(uuid)          to authenticated;
+grant execute on function public.quiz_reveal(uuid, integer)  to authenticated;
+```
+
+**Verificar:**
+
+```sql
+select count(*) from public.quiz_questions;   -- esperado: 32
+select routine_name from information_schema.routines
+ where routine_schema = 'public' and routine_name like 'quiz_%';
+-- esperado: quiz_start, quiz_answer, quiz_advance, quiz_reveal
+```
+
+**Para adicionar perguntas novas** (basta mais `insert` — 4 opções e `answer` de 0 a 3):
+
+```sql
+insert into public.quiz_questions (id, q, options, answer) values
+ ('q33','Sua pergunta aqui?','["Opção 1","Opção 2","Opção 3","Opção 4"]',2);
+```
+
+Sem a v12: a aba quiz abre, mas iniciar/responder exibe "rode a Migração v12" — o app segue normal.
+
 ## 🔑 Sobre a senha do adm (`123`)
 
 - Ela funciona porque foi gravada **direto no banco** (criptografada com bcrypt).

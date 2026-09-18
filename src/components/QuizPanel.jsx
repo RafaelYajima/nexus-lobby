@@ -1,13 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import Spinner from './Spinner'
 import { useAuth } from '../context/AuthContext'
-import { QUESTION_TIME_MS } from '../hooks/useQuizGame'
-import { ROUND_COUNT } from '../data/quizQuestions'
+import { QUESTION_TIME_MS, QUESTION_TIME_S, ROUND_COUNT } from '../hooks/useQuizGame'
 
 const LETTERS = ['A', 'B', 'C', 'D']
 const MEDALS = ['🥇', '🥈', '🥉']
 
-/** ⏱️ contador regressivo sincronizado com o timestamp do servidor. */
+/** ⏱️ contador regressivo (a validação oficial é do clock do servidor — v12). */
 function useCountdown(startedAt, running) {
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
@@ -30,15 +29,42 @@ export default function QuizPanel({ quiz, members }) {
     questions,
     answers,
     answeredNow,
+    myAnswers,
+    reveals,
     loading,
     blocked,
     starting,
     start,
     answer,
+    reveal,
   } = quiz
 
   const [startMsg, setStartMsg] = useState('')
   const { remain, frac } = useCountdown(game?.question_started_at, !!game)
+  const timedOut = !game ? false : remain <= 0
+
+  // minha resposta desta rodada: prioriza o que o servidor confirmou (linha gravada),
+  // senão cai na resposta recém-retornada pela RPC (instantâneo pra UI)
+  const roundKey = game ? `${game.id}:${game.question_idx}` : null
+  const myRow = useMemo(() => {
+    if (!game || !user) return null
+    return (
+      answers.find((a) => a.user_id === user.id && a.question_idx === game.question_idx) ?? null
+    )
+  }, [answers, game, user])
+  const myAnswer = myRow ?? (roundKey ? (myAnswers[roundKey] ?? null) : null)
+
+  // gabarito visível: depois de responder (RPC devolve) ou ao revelar rodada encerrada
+  const correctIdx = useMemo(() => {
+    if (!roundKey) return null
+    return myAnswers[roundKey]?.answerIndex ?? reveals[roundKey] ?? null
+  }, [myAnswers, reveals, roundKey])
+
+  // estourei o tempo sem responder → peço o gabarito (o banco só libera rodada passada)
+  useEffect(() => {
+    if (game && !myAnswer && timedOut && correctIdx == null) reveal(game.question_idx)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [game?.id, game?.question_idx, myAnswer, timedOut, correctIdx])
 
   // placar agregado (todas as rodadas do jogo em foco)
   const totals = useMemo(() => {
@@ -54,11 +80,6 @@ export default function QuizPanel({ quiz, members }) {
     [members, totals]
   )
 
-  const myAnswer = useMemo(() => {
-    if (!game || !user) return null
-    return answers.find((a) => a.user_id === user.id && a.question_idx === game.question_idx) ?? null
-  }, [answers, game, user])
-
   const onStart = async () => {
     setStartMsg('')
     const res = await start()
@@ -73,7 +94,7 @@ export default function QuizPanel({ quiz, members }) {
           O Quiz Relâmpago ainda não foi ativado no banco
         </p>
         <p className="mx-auto mt-1 max-w-md text-xs text-zinc-500 dark:text-zinc-400">
-          Rode a <strong>Migração v11</strong> (SETUP.md) no SQL Editor do Supabase.
+          Rode as <strong>Migrações v11 + v12</strong> (SETUP.md) no SQL Editor do Supabase.
         </p>
       </div>
     )
@@ -83,6 +104,7 @@ export default function QuizPanel({ quiz, members }) {
 
   const myHits = user ? answers.filter((a) => a.user_id === user.id && a.correct).length : 0
   const myTotal = user ? totals[user.id] ?? 0 : 0
+  const q = game ? questions[game.question_idx] : null
 
   return (
     <div className="space-y-4">
@@ -95,7 +117,8 @@ export default function QuizPanel({ quiz, members }) {
               ⚡ Quiz Relâmpago
             </p>
             <p className="text-xs font-bold text-zinc-400 dark:text-zinc-500">
-              Pergunta {Math.min(game.question_idx + 1, questions.length)} de {questions.length || ROUND_COUNT}
+              Pergunta {Math.min(game.question_idx + 1, questions.length || ROUND_COUNT)} de{' '}
+              {questions.length || ROUND_COUNT}
             </p>
           </div>
 
@@ -118,82 +141,88 @@ export default function QuizPanel({ quiz, members }) {
             </span>
           </div>
 
-          {/* pergunta */}
-          {questions[game.question_idx] ? (
-            (() => {
-              const q = questions[game.question_idx]
-              return (
-                <div key={`${game.id}:${game.question_idx}`}>
-                  <p className="mt-4 text-base font-extrabold leading-snug text-zinc-900 dark:text-zinc-50">
-                    {q.q}
-                  </p>
-                  <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                    {q.options.map((opt, i) => {
-                      const mine = myAnswer?.chosen === i
-                      const answered = !!myAnswer
-                      const locked = myAnswer || remain <= 0
-                      const reveal = myAnswer || remain <= 0
-                      const isCorrect = i === q.a
-                      let cls =
-                        'border-zinc-200 bg-white hover:border-amber-400 hover:bg-amber-50 dark:border-white/10 dark:bg-white/5 dark:hover:border-amber-400/60'
-                      if (reveal && isCorrect)
-                        cls = 'border-emerald-500 bg-emerald-500/10 dark:border-emerald-400'
-                      else if (reveal && mine && !isCorrect)
-                        cls = 'border-rose-500 bg-rose-500/10 dark:border-rose-400'
-                      else if (reveal)
-                        cls = 'border-zinc-200 bg-white opacity-50 dark:border-white/10 dark:bg-white/5'
-                      return (
-                        <button
-                          key={i}
-                          type="button"
-                          disabled={!!locked}
-                          onClick={() => answer(i)}
-                          className={`flex items-center gap-3 rounded-2xl border px-3.5 py-3 text-left text-sm font-bold text-zinc-800 shadow-sm transition active:scale-[0.98] disabled:cursor-default dark:text-zinc-100 ${cls}`}
-                        >
-                          <span
-                            className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-black ${
-                              reveal && isCorrect
-                                ? 'bg-emerald-500 text-white'
-                                : reveal && mine && !isCorrect
-                                  ? 'bg-rose-500 text-white'
-                                  : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
-                            }`}
-                          >
-                            {reveal && isCorrect ? '✓' : reveal && mine ? '✗' : LETTERS[i]}
-                          </span>
-                          <span className="min-w-0 break-words">{opt}</span>
-                        </button>
-                      )
-                    })}
-                  </div>
+          {/* pergunta (do snapshot do servidor — gabarito nunca sai de lá em massa) */}
+          {q ? (
+            <div key={roundKey}>
+              <p className="mt-4 text-base font-extrabold leading-snug text-zinc-900 dark:text-zinc-50">
+                {q.q}
+              </p>
+              <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                {q.options.map((opt, i) => {
+                  const mine = myAnswer?.chosen === i
+                  const locked = !!myAnswer || timedOut
+                  const showResult = locked && (correctIdx != null || mine)
+                  const isCorrect = correctIdx != null && i === correctIdx
+                  let cls =
+                    'border-zinc-200 bg-white hover:border-amber-400 hover:bg-amber-50 dark:border-white/10 dark:bg-white/5 dark:hover:border-amber-400/60'
+                  if (showResult && isCorrect)
+                    cls = 'border-emerald-500 bg-emerald-500/10 dark:border-emerald-400'
+                  else if (showResult && mine && !myAnswer?.correct)
+                    cls = 'border-rose-500 bg-rose-500/10 dark:border-rose-400'
+                  else if (locked)
+                    cls = 'border-zinc-200 bg-white opacity-50 dark:border-white/10 dark:bg-white/5'
+                  return (
+                    <button
+                      key={i}
+                      type="button"
+                      disabled={locked}
+                      onClick={() => answer(i)}
+                      className={`flex items-center gap-3 rounded-2xl border px-3.5 py-3 text-left text-sm font-bold text-zinc-800 shadow-sm transition active:scale-[0.98] disabled:cursor-default dark:text-zinc-100 ${cls}`}
+                    >
+                      <span
+                        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-black ${
+                          showResult && isCorrect
+                            ? 'bg-emerald-500 text-white'
+                            : showResult && mine && !myAnswer?.correct
+                              ? 'bg-rose-500 text-white'
+                              : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                        }`}
+                      >
+                        {showResult && isCorrect ? '✓' : showResult && mine ? '✗' : LETTERS[i]}
+                      </span>
+                      <span className="min-w-0 break-words">{opt}</span>
+                    </button>
+                  )
+                })}
+              </div>
 
-                  {/* feedback */}
-                  <div className="mt-3 min-h-6 text-center text-xs font-bold">
-                    {myAnswer ? (
-                      myAnswer.correct ? (
-                        <span className="text-emerald-600 dark:text-emerald-400">
-                          ✅ Correta! +{myAnswer.points} pts
-                        </span>
-                      ) : (
-                        <span className="text-rose-500">
-                          ❌ Errou — era <strong>{LETTERS[q.a]}</strong>: {q.options[q.a]}
-                        </span>
-                      )
-                    ) : remain <= 0 ? (
-                      <span className="text-rose-500">
-                        ⏰ Tempo! Era <strong>{LETTERS[q.a]}</strong>: {q.options[q.a]}
-                      </span>
-                    ) : (
-                      <span className="text-zinc-400 dark:text-zinc-500">
-                        Acerte rápido: o bônus de rapidez cai a cada segundo…
-                      </span>
-                    )}
-                  </div>
-                </div>
-              )
-            })()
+              {/* feedback */}
+              <div className="mt-3 min-h-6 text-center text-xs font-bold">
+                {myAnswer ? (
+                  myAnswer.correct ? (
+                    <span className="text-emerald-600 dark:text-emerald-400">
+                      ✅ Correta! +{myAnswer.points} pts
+                    </span>
+                  ) : correctIdx != null ? (
+                    <span className="text-rose-500">
+                      ❌ Errou — era <strong>{LETTERS[correctIdx]}</strong>: {q.options[correctIdx]}
+                    </span>
+                  ) : (
+                    <span className="text-rose-500">❌ Errou — a certa surge quando a rodada virar</span>
+                  )
+                ) : timedOut ? (
+                  correctIdx != null ? (
+                    <span className="text-rose-500">
+                      ⏰ Tempo! Era <strong>{LETTERS[correctIdx]}</strong>: {q.options[correctIdx]}
+                    </span>
+                  ) : (
+                    <span className="text-zinc-400 dark:text-zinc-500">⏰ Tempo esgotado…</span>
+                  )
+                ) : (
+                  <span className="text-zinc-400 dark:text-zinc-500">
+                    Acerte rápido: o bônus de rapidez cai a cada segundo…
+                  </span>
+                )}
+              </div>
+            </div>
           ) : (
-            <Spinner className="p-6" />
+            /* partida criada antes da v12 (sem snapshot) — o servidor encerra sozinho */
+            <div className="mt-6 py-6 text-center">
+              <p className="text-2xl">🧹</p>
+              <p className="mt-2 text-xs font-bold text-zinc-500 dark:text-zinc-400">
+                Esta partida começou antes da v12 — encerrando automaticamente…
+              </p>
+            </div>
           )}
 
           {/* status da rodada */}
@@ -215,8 +244,8 @@ export default function QuizPanel({ quiz, members }) {
           <div className="bg-gradient-to-br from-amber-500 to-rose-500 p-5 text-white">
             <p className="text-lg font-black">⚡ Quiz Relâmpago</p>
             <p className="mt-1 text-xs text-white/80">
-              {ROUND_COUNT} perguntas · {QUESTION_TIME_MS / 1000}s por pergunta · acerto = 10 pts +
-              bônus de rapidez (até +5)
+              {ROUND_COUNT} perguntas · {QUESTION_TIME_S}s por pergunta · acerto = 10 pts + bônus de
+              rapidez (até +5) · correção 100% no servidor 🔒
             </p>
           </div>
           <div className="p-5 text-center">

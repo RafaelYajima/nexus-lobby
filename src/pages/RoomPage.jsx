@@ -21,8 +21,6 @@ export default function RoomPage() {
   const { profile } = useProfile()
   const { join, leave } = useRooms()
   const { messages, loading: chatLoading, blocked: chatBlocked, send } = useRoomChat(roomId)
-  const quiz = useQuizGame(roomId, members.length)
-  const quizLive = !!quiz.game // partida rolando (para o badge pulsante da aba)
 
   const [room, setRoom] = useState(null)
   const [notFound, setNotFound] = useState(false)
@@ -34,6 +32,10 @@ export default function RoomPage() {
   const [sending, setSending] = useState(false)
   const [sendErr, setSendErr] = useState('')
   const boxRef = useRef(null)
+
+  // quiz roda após os states (members precisa existir antes)
+  const quiz = useQuizGame(roomId, members.length)
+  const quizLive = !!quiz.game // partida rolando (para o badge pulsante da aba)
 
   const username =
     profile?.username || user?.user_metadata?.username || user?.email?.split('@')[0] || 'jogador'
