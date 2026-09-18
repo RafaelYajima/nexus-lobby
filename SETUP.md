@@ -622,6 +622,52 @@ select tablename from pg_publication_tables where pubname = 'supabase_realtime';
 
 Sem a v8: as páginas de Salas mostram o aviso 🔧 e todo o resto segue funcionando.
 
+## 🏆 Migração v9 — Ranking da comunidade (view de pontuação)
+
+Uma **view** agregada com a pontuação do ranking. Sem tabela nova. Roda com permissão de leitura para logados; a view enxerga as tabelas (definer) e expõe só o agregado (pontos), não os dados brutos.
+
+```sql
+-- ========================================================
+-- MIGRAÇÃO v9 — Ranking (idempotente)
+-- ========================================================
+
+create or replace view public.community_score as
+select
+  p.id,
+  p.username,
+  p.tag,
+  p.role,
+    coalesce(f.friends, 0)  * 10
+  + coalesce(m.msgs, 0)
+  + coalesce(rm.rmsgs, 0)
+  + coalesce(r.rooms, 0)    * 15
+  + coalesce(fv.faved, 0)   * 5  as score
+from public.profiles p
+left join (
+  select uid, count(*) as friends from (
+    select requester as uid from public.friendships where status = 'accepted'
+    union all
+    select addressee as uid from public.friendships where status = 'accepted'
+  ) x group by uid
+) f  on f.uid  = p.id
+left join (select sender_id,  count(*) as msgs  from public.direct_messages  group by sender_id)  m  on m.sender_id  = p.id
+left join (select sender_id,  count(*) as rmsgs from public.room_messages    group by sender_id)  rm on rm.sender_id = p.id
+left join (select created_by, count(*) as rooms from public.rooms            group by created_by) r  on r.created_by = p.id
+left join (select friend_id,  count(*) as faved from public.friend_favorites group by friend_id)  fv on fv.friend_id = p.id;
+
+grant select on public.community_score to authenticated;
+```
+
+**Verificar:**
+
+```sql
+select * from public.community_score order by score desc limit 10;
+```
+
+Pontos: 🤝 10/amizade aceita · 💬 1/mensagem (DM+sala) · 🎮 15/sala criada · ⭐ 5/quem te favoritou.
+
+Sem a v9: a página Ranking mostra o aviso 🔧 e o resto segue normal.
+
 ## 🔑 Sobre a senha do adm (`123`)
 
 - Ela funciona porque foi gravada **direto no banco** (criptografada com bcrypt).

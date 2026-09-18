@@ -1,9 +1,11 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
+import NotificationSounds from './components/NotificationSounds'
 import AuthPage from './pages/AuthPage'
 import ResetPassword from './pages/ResetPassword'
 import Lobby from './pages/Lobby'
 import ProfilePage from './pages/ProfilePage'
 import ChatPage from './pages/ChatPage'
+import RankingPage from './pages/RankingPage'
 import RoomsPage from './pages/RoomsPage'
 import RoomPage from './pages/RoomPage'
 import AdminPage from './pages/AdminPage'
@@ -13,7 +15,9 @@ import RequireAdm from './components/RequireAdm'
 
 export default function App() {
   return (
-    <Routes>
+    <>
+      <NotificationSounds />
+      <Routes>
       <Route path="/login" element={<AuthPage />} />
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route
@@ -64,6 +68,14 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/ranking"
+            element={
+              <ProtectedRoute>
+                <RankingPage />
+              </ProtectedRoute>
+            }
+          />
       <Route
         path="/admin"
         element={
@@ -76,6 +88,7 @@ export default function App() {
       />
       <Route path="/" element={<Navigate to="/lobby" replace />} />
       <Route path="*" element={<Navigate to="/lobby" replace />} />
-    </Routes>
+      </Routes>
+    </>
   )
 }

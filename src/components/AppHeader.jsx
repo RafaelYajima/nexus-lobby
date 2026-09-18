@@ -3,6 +3,7 @@ import { Link, NavLink, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useUnread } from '../context/UnreadContext'
 import { useProfile } from '../hooks/useProfile'
+import { isSoundEnabled, setSoundEnabled, playMessageDing } from '../lib/sound'
 import Logo from './Logo'
 import ThemeToggle from './ThemeToggle'
 import Spinner from './Spinner'
@@ -15,7 +16,7 @@ const NAV_ITEMS = [
   { label: 'Salas', to: '/salas' },
   { label: 'Admin', to: '/admin', admOnly: true },
   { label: 'Loja', to: null },
-  { label: 'Ranking', to: null },
+  { label: 'Ranking', to: '/ranking' },
   { label: 'Comunidade', to: null },
 ]
 
@@ -26,6 +27,28 @@ const IconLogout = () => (
     <line x1="21" y1="12" x2="9" y2="12" />
   </svg>
 )
+
+/** Botão de ligar/desligar os sons de notificação (persistido no navegador). */
+function SoundToggle() {
+  const [on, setOn] = useState(isSoundEnabled())
+  const toggle = () => {
+    const next = !on
+    setSoundEnabled(next)
+    setOn(next)
+    if (next) playMessageDing() // testeinha ao ligar
+  }
+  return (
+    <button
+      type="button"
+      onClick={toggle}
+      title={on ? 'Desativar sons de notificação' : 'Ativar sons de notificação'}
+      aria-label={on ? 'Desativar sons' : 'Ativar sons'}
+      className="rounded-xl border border-zinc-200 bg-white/80 p-2.5 text-sm transition hover:border-violet-400/60 active:scale-95 dark:border-white/10 dark:bg-white/5"
+    >
+      {on ? '🔊' : '🔇'}
+    </button>
+  )
+}
 
 /**
  * Header compartilhado das áreas logadas.
@@ -96,6 +119,7 @@ export default function AppHeader() {
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3">
+          <SoundToggle />
           <ThemeToggle />
 
           {/* chip do usuário -> página de perfil */}
