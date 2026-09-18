@@ -1283,6 +1283,12 @@ Depois basta **recarregar a página da sala**: membros, chat e quiz passam a
 carregar na hora. Se o quiz ainda mostrar 🔧 depois disso, aí sim são as
 migrações v11/v12 que faltam (o app avisa qual é).
 
+> ⚠️ **Se o SQL Editor devolver `ERROR 40P01: deadlock detected` ao rodar a v13:** isto
+> é uma disputa de trava com o app **aberto** (abas do site fazendo polling/
+> Realtime nas mesmas tabelas), não uma falha da migração. O Postgres abortou a
+> transação inteira — nada ficou aplicado pela metade. Solução: **feche todas as
+> abas/janelas do NEXUS** e rode o script de novo.
+
 ## 🔑 Sobre a senha do adm (`123`)
 
 - Ela funciona porque foi gravada **direto no banco** (criptografada com bcrypt).
