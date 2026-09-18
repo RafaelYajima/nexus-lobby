@@ -7,6 +7,7 @@ import PresenceControl from '../components/presence/PresenceControl'
 import AddFriendMenu from '../components/amigos/AddFriendMenu'
 import { useAuth } from '../context/AuthContext'
 import { usePresence } from '../context/PresenceContext'
+import { useUnread } from '../context/UnreadContext'
 import { useFriends } from '../hooks/useFriends'
 import { useProfile } from '../hooks/useProfile'
 import { PRESENCE_META } from '../lib/presence'
@@ -72,6 +73,7 @@ function InviteChip() {
 export default function FriendsPage() {
   const { user } = useAuth()
   const { others } = usePresence()
+  const { unreadByFriend } = useUnread()
   const {
     friends,
     incoming,
@@ -164,9 +166,6 @@ export default function FriendsPage() {
         <header className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h1 className="font-display text-2xl font-black tracking-tight">👥 Amigos</h1>
-            <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-              Seu círculo, seu status. Só amigos veem você online.
-            </p>
           </div>
           <div className="flex items-center gap-2">
             <InviteChip />
@@ -367,9 +366,16 @@ export default function FriendsPage() {
                                 <Link
                                   to={`/chat/${f.userId}`}
                                   title={`Conversar com ${f.username}`}
-                                  className="rounded-xl px-2 py-2 text-sm transition hover:bg-violet-600/10 active:scale-95"
+                                  className="relative rounded-xl px-2 py-2 text-sm transition hover:bg-violet-600/10 active:scale-95"
                                 >
                                   💬
+                                  {(unreadByFriend[f.userId] ?? 0) > 0 && (
+                                    <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-black text-white shadow">
+                                      {unreadByFriend[f.userId] > 9
+                                        ? '9+'
+                                        : unreadByFriend[f.userId]}
+                                    </span>
+                                  )}
                                 </Link>
                                 <button
                                   type="button"

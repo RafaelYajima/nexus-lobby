@@ -138,9 +138,7 @@ export default function AdminPage() {
             <h1 className="flex items-center gap-2.5 text-3xl font-black tracking-tight text-zinc-900 sm:text-4xl dark:text-white">
               <span aria-hidden="true">🛡️</span> Painel <span className="text-gradient">Admin</span>
             </h1>
-            <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-              Gerencie os jogadores e a equipe de moderação do NEXUS.
-            </p>
+
           </div>
           <button
             type="button"

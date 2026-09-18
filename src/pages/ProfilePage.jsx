@@ -111,9 +111,7 @@ export default function ProfilePage() {
           <h1 className="text-3xl font-black tracking-tight text-zinc-900 sm:text-4xl dark:text-white">
             Meu <span className="text-gradient">perfil</span>
           </h1>
-          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-            Gerencie sua identidade, segurança e preferências da conta.
-          </p>
+
         </section>
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">

@@ -5,6 +5,7 @@ import Spinner from '../components/Spinner'
 import RoleBadge from '../components/RoleBadge'
 import { useAuth } from '../context/AuthContext'
 import { usePresence } from '../context/PresenceContext'
+import { useUnread } from '../context/UnreadContext'
 import { useFriends } from '../hooks/useFriends'
 import { useChat } from '../hooks/useChat'
 import { PRESENCE_META } from '../lib/presence'
@@ -29,6 +30,7 @@ export default function ChatPage() {
   const { friendId } = useParams()
   const { user } = useAuth()
   const { others } = usePresence()
+  const { setActiveChat, markRead } = useUnread()
   const { friends, loading: friendsLoading } = useFriends()
   const friend = friends.find((f) => f.userId === friendId)
   const { messages, loading, blocked, err, send } = useChat(friendId)
@@ -46,6 +48,23 @@ export default function ChatPage() {
   useEffect(() => {
     boxRef.current?.scrollTo({ top: boxRef.current.scrollHeight, behavior: 'smooth' })
   }, [messages])
+
+  // marca lida ao entrar, ao receber (chat aberto) e ao sair
+  useEffect(() => {
+    if (!friend) return undefined
+    setActiveChat(friendId)
+    markRead(friendId)
+    return () => {
+      setActiveChat(null)
+      markRead(friendId)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [friendId, friend])
+
+  useEffect(() => {
+    if (friend && messages.length > 0) markRead(friendId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages, friend, friendId])
 
   const submit = async (e) => {
     e?.preventDefault()

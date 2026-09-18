@@ -453,6 +453,46 @@ select tablename from pg_publication_tables where pubname = 'supabase_realtime';
 
 Sem a v6: a página do chat mostra "🔧 O chat ainda não foi ativado" e o resto do app segue normal.
 
+## 🔔 Migração v7 — Contadores de mensagens não lidas
+
+Guarda "quando eu li cada conversa" — aí o badge vermelho (menu Amigos e 💬 de cada amigo) sabe contar até você abrir o chat de novo. Sincroniza entre dispositivos.
+
+```sql
+-- ========================================================
+-- MIGRAÇÃO v7 — Leitura de mensagens (idempotente)
+-- ========================================================
+
+create table if not exists public.chat_reads (
+  user_id       uuid not null references auth.users (id) on delete cascade,
+  other_user_id uuid not null references auth.users (id) on delete cascade,
+  last_read_at  timestamptz not null default now(),
+  primary key (user_id, other_user_id)
+);
+
+alter table public.chat_reads enable row level security;
+
+drop policy if exists "ve_minha_leitura"       on public.chat_reads;
+drop policy if exists "grava_minha_leitura"    on public.chat_reads;
+drop policy if exists "atualiza_minha_leitura" on public.chat_reads;
+
+create policy "ve_minha_leitura" on public.chat_reads
+  for select using (user_id = auth.uid());
+
+create policy "grava_minha_leitura" on public.chat_reads
+  for insert with check (user_id = auth.uid());
+
+create policy "atualiza_minha_leitura" on public.chat_reads
+  for update using (user_id = auth.uid());
+```
+
+**Verificar:**
+
+```sql
+select * from public.chat_reads;  -- começa vazia; enche conforme você abre chats
+```
+
+Sem a v7: badges nunca aparecem e o app segue normal (contadores ficam zerados localmente).
+
 ## 🔑 Sobre a senha do adm (`123`)
 
 - Ela funciona porque foi gravada **direto no banco** (criptografada com bcrypt).

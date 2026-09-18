@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { useUnread } from '../context/UnreadContext'
 import { useProfile } from '../hooks/useProfile'
 import Logo from './Logo'
 import ThemeToggle from './ThemeToggle'
@@ -31,6 +32,7 @@ const IconLogout = () => (
  */
 export default function AppHeader() {
   const { user, signOut } = useAuth()
+  const { totalUnread } = useUnread()
   const { profile } = useProfile()
   const { pathname } = useLocation()
   const [signingOut, setSigningOut] = useState(false)
@@ -57,9 +59,9 @@ export default function AppHeader() {
             </span>
           </Link>
 
-          {/* nav principal */}
+          {/* nav principal — itens admOnly só renderizam para role adm */}
           <nav className="hidden items-center gap-1 md:flex" aria-label="Navegação principal">
-            {NAV_ITEMS.map((item) =>
+            {NAV_ITEMS.filter((item) => !item.admOnly || role === 'adm').map((item) =>
               item.to ? (
                 <NavLink
                   key={item.label}
@@ -70,7 +72,14 @@ export default function AppHeader() {
                       : 'text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200'
                   }`}
                 >
-                  {item.label}
+                  <span className="inline-flex items-center">
+                    {item.label}
+                    {item.to === '/amigos' && totalUnread > 0 && (
+                      <span className="ml-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-black text-white shadow">
+                        {totalUnread > 9 ? '9+' : totalUnread}
+                      </span>
+                    )}
+                  </span>
                 </NavLink>
               ) : (
                 <span
