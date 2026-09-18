@@ -7,6 +7,8 @@ import { useAuth } from '../context/AuthContext'
 import { useProfile } from '../hooks/useProfile'
 import { useRooms } from '../hooks/useRooms'
 import { useRoomChat } from '../hooks/useRoomChat'
+import { useQuizGame } from '../hooks/useQuizGame'
+import QuizPanel from '../components/QuizPanel'
 import { GAMES } from '../data/games'
 import { dayLabel, timeLabel } from '../utils/time'
 
@@ -19,11 +21,14 @@ export default function RoomPage() {
   const { profile } = useProfile()
   const { join, leave } = useRooms()
   const { messages, loading: chatLoading, blocked: chatBlocked, send } = useRoomChat(roomId)
+  const quiz = useQuizGame(roomId, members.length)
+  const quizLive = !!quiz.game // partida rolando (para o badge pulsante da aba)
 
   const [room, setRoom] = useState(null)
   const [notFound, setNotFound] = useState(false)
   const [loadingRoom, setLoadingRoom] = useState(true)
   const [members, setMembers] = useState([]) // db-members decorados com perfil
+  const [tab, setTab] = useState('chat') // 'chat' | 'quiz'
   const [inRoomNow, setInRoomNow] = useState(new Set()) // ids com a aba aberta na sala
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
@@ -229,9 +234,45 @@ export default function RoomPage() {
               </ul>
             </aside>
 
-            {/* chat da sala */}
+            {/* chat / quiz */}
             <section className="order-1 flex flex-col sm:order-2">
-              <div
+              {/* abas */}
+              <div className="mb-3 inline-flex items-center self-start rounded-2xl border border-zinc-200 bg-white p-1 dark:border-white/10 dark:bg-ink-900">
+                <button
+                  type="button"
+                  onClick={() => setTab('chat')}
+                  className={`rounded-xl px-4 py-2 text-xs font-extrabold transition ${
+                    tab === 'chat'
+                      ? 'bg-violet-600 text-white shadow'
+                      : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200'
+                  }`}
+                >
+                  💬 Chat
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTab('quiz')}
+                  className={`relative rounded-xl px-4 py-2 text-xs font-extrabold transition ${
+                    tab === 'quiz'
+                      ? 'bg-gradient-to-r from-amber-500 to-rose-500 text-white shadow'
+                      : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200'
+                  }`}
+                >
+                  ⚡ Quiz
+                  {quizLive && tab !== 'quiz' && (
+                    <span className="absolute -right-0.5 -top-0.5 flex h-2.5 w-2.5">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
+                      <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-amber-500" />
+                    </span>
+                  )}
+                </button>
+              </div>
+
+              {tab === 'quiz' ? (
+                <QuizPanel quiz={quiz} members={members} />
+              ) : (
+                <>
+                  <div
                 ref={boxRef}
                 className="min-h-[42vh] flex-1 space-y-2 overflow-y-auto rounded-3xl border border-zinc-200 bg-white/70 p-4 shadow-soft-inner max-h-[58vh] dark:border-white/10 dark:bg-white/[0.03]"
               >
@@ -333,6 +374,8 @@ export default function RoomPage() {
                     Enter envia · Shift+Enter quebra linha · até 500 caracteres
                   </p>
                 </form>
+              )}
+                </>
               )}
             </section>
           </div>

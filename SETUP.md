@@ -686,6 +686,194 @@ select username, sound_enabled from public.profiles;
 
 Sem a v10: o app funciona, mas a preferência volta ao modo antigo (só no navegador atual).
 
+## ⚡ Migração v11 — Quiz Relâmpago (o primeiro jogo de verdade!)
+
+Jogo por sala: qualquer membro inicia uma partida de **8 perguntas com 10s cada**; o sistema avança as rodadas sozinho (estado no banco + update condicional — não depende de quem criou continuar online). Acerto = **10 pts + bônus de rapidez (até +5)**; o placar final cai direto no 🏆 Ranking.
+
+> Pré-requisito: ter rodado a **v8** (salas) e a **v9** (ranking) antes — a v11 reutiliza
+> `room_members` e recria a view `community_score` somando os pontos de jogo.
+
+```sql
+-- ========================================================
+-- MIGRAÇÃO v11 — Quiz Relâmpago (idempotente)
+-- ========================================================
+
+-- 1) Partidas (uma ativa por sala) ------------------------------------
+create table if not exists public.quiz_games (
+  id                  uuid primary key default gen_random_uuid(),
+  room_id             uuid not null references public.rooms (id) on delete cascade,
+  host_id             uuid not null references auth.users (id) on delete cascade,
+  question_ids        jsonb not null default '[]'::jsonb,
+  status              text not null default 'active' check (status in ('active','finished')),
+  question_idx        integer not null default 0,
+  question_started_at timestamptz not null default now(),
+  created_at          timestamptz not null default now(),
+  finished_at         timestamptz
+);
+
+-- impede dupla partida na mesma sala (clique duplo / corrida de telas)
+create unique index if not exists quiz_games_uma_ativa_por_sala
+  on public.quiz_games (room_id) where status = 'active';
+
+create index if not exists quiz_games_sala_idx
+  on public.quiz_games (room_id, created_at desc);
+
+alter table public.quiz_games enable row level security;
+
+drop policy if exists "quiz: ve partidas da minha sala" on public.quiz_games;
+drop policy if exists "quiz: membro inicia partida"    on public.quiz_games;
+drop policy if exists "quiz: membro avanca partida"    on public.quiz_games;
+
+create policy "quiz: ve partidas da minha sala" on public.quiz_games
+  for select using (
+    exists (
+      select 1 from public.room_members m
+      where m.room_id = quiz_games.room_id and m.user_id = auth.uid()
+    )
+  );
+
+create policy "quiz: membro inicia partida" on public.quiz_games
+  for insert with check (
+    host_id = auth.uid()
+    and exists (
+      select 1 from public.room_members m
+      where m.room_id = quiz_games.room_id and m.user_id = auth.uid()
+    )
+  );
+
+-- qualquer membro avança a rodada (update condicional: o primeiro vence)
+create policy "quiz: membro avanca partida" on public.quiz_games
+  for update using (
+    exists (
+      select 1 from public.room_members m
+      where m.room_id = quiz_games.room_id and m.user_id = auth.uid()
+    )
+  );
+
+-- 2) Respostas (placar e histórico da partida) ------------------------
+create table if not exists public.quiz_answers (
+  game_id      uuid not null references public.quiz_games (id) on delete cascade,
+  question_idx integer not null,
+  user_id      uuid not null references auth.users (id) on delete cascade,
+  chosen       integer not null,
+  correct      boolean not null,
+  points       integer not null default 0,
+  answered_at  timestamptz not null default now(),
+  primary key (game_id, question_idx, user_id) -- 1 resposta por pergunta por pessoa
+);
+
+alter table public.quiz_answers enable row level security;
+
+drop policy if exists "quiz: ve respostas da minha sala" on public.quiz_answers;
+drop policy if exists "quiz: envio minha resposta"      on public.quiz_answers;
+
+create policy "quiz: ve respostas da minha sala" on public.quiz_answers
+  for select using (
+    exists (
+      select 1
+      from public.quiz_games g
+      join public.room_members m
+        on m.room_id = g.room_id and m.user_id = auth.uid()
+      where g.id = quiz_answers.game_id
+    )
+  );
+
+create policy "quiz: envio minha resposta" on public.quiz_answers
+  for insert with check (
+    user_id = auth.uid()
+    and exists (
+      select 1
+      from public.quiz_games g
+      join public.room_members m
+        on m.room_id = g.room_id and m.user_id = auth.uid()
+      where g.id = quiz_answers.game_id and g.status = 'active'
+    )
+  );
+
+-- 3) Placares finais (entrada de pontos no ranking) -------------------
+-- Tabela genérica: serve pro Quiz e pros próximos jogos (game = 'quiz', 'brawl', …)
+create table if not exists public.game_results (
+  id         uuid primary key default gen_random_uuid(),
+  user_id    uuid not null references auth.users (id) on delete cascade,
+  game       text not null,
+  room_id    uuid references public.rooms (id) on delete set null,
+  points     integer not null,
+  detail     jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+-- 1 placar por pessoa por partida → gravação idempotente mesmo com 2 abas
+create unique index if not exists game_results_uma_por_partida
+  on public.game_results (user_id, game, (detail ->> 'game_id'));
+
+alter table public.game_results enable row level security;
+
+drop policy if exists "jogos: placares visiveis" on public.game_results;
+drop policy if exists "jogos: grava meu placar"  on public.game_results;
+
+-- placares são público de ranking (pontos, não dados sensíveis)
+create policy "jogos: placares visiveis" on public.game_results
+  for select using (true);
+
+create policy "jogos: grava meu placar" on public.game_results
+  for insert with check (user_id = auth.uid());
+
+-- 4) Ranking: soma os pontos de jogo na view ---------------------------
+create or replace view public.community_score as
+select
+  p.id,
+  p.username,
+  p.tag,
+  p.role,
+    coalesce(f.friends, 0)  * 10
+  + coalesce(m.msgs, 0)
+  + coalesce(rm.rmsgs, 0)
+  + coalesce(r.rooms, 0)    * 15
+  + coalesce(fv.faved, 0)   * 5
+  + coalesce(g.gpts, 0)               as score
+from public.profiles p
+left join (
+  select uid, count(*) as friends from (
+    select requester as uid from public.friendships where status = 'accepted'
+    union all
+    select addressee as uid from public.friendships where status = 'accepted'
+  ) x group by uid
+) f  on f.uid  = p.id
+left join (select sender_id,  count(*) as msgs  from public.direct_messages  group by sender_id)  m  on m.sender_id  = p.id
+left join (select sender_id,  count(*) as rmsgs from public.room_messages    group by sender_id)  rm on rm.sender_id = p.id
+left join (select created_by, count(*) as rooms from public.rooms            group by created_by) r  on r.created_by = p.id
+left join (select friend_id,  count(*) as faved from public.friend_favorites group by friend_id)  fv on fv.friend_id = p.id
+left join (select user_id,    sum(points) as gpts from public.game_results   group by user_id)    g  on g.user_id   = p.id;
+
+grant select on public.community_score to authenticated;
+
+-- 5) Realtime (pergunta nova + respostas aparecem na hora) -------------
+do $$
+declare t text;
+begin
+  foreach t in array array['quiz_games','quiz_answers'] loop
+    if not exists (
+      select 1 from pg_publication_tables
+      where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t
+    ) then
+      execute format('alter publication supabase_realtime add table public.%I', t);
+    end if;
+  end loop;
+end $$;
+```
+
+**Verificar:**
+
+```sql
+select * from public.quiz_games;     -- vazio até a 1ª partida
+select * from public.game_results;   -- idem
+select username, score from public.community_score order by score desc limit 5;
+```
+
+**Observações:**
+- A validação de tempo/pontos é no **cliente** (com um relógio de 10s vindo do servidor). Entre amigos é suficiente; se um dia o ranking virar competição séria, o passo é mover a correção pra um RPC/security definer.
+- Sem a v11: a aba ⚡ Quiz mostra o aviso 🔧 e o resto do app segue normal.
+
 ## 🔑 Sobre a senha do adm (`123`)
 
 - Ela funciona porque foi gravada **direto no banco** (criptografada com bcrypt).

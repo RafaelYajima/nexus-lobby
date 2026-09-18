@@ -14,6 +14,7 @@ const PODIUM_STYLES = [
 ]
 
 const SCORING = [
+  { icon: '⚡', pts: 'até 120', what: 'por partida de Quiz Relâmpago nas Salas' },
   { icon: '🤝', pts: 10, what: 'por amizade aceita' },
   { icon: '💬', pts: 1, what: 'por mensagem enviada (DM ou sala)' },
   { icon: '🎮', pts: 15, what: 'por sala criada' },
@@ -201,7 +202,7 @@ export default function RankingPage() {
             ))}
           </ul>
           <p className="mt-3 text-[11px] text-zinc-400 dark:text-zinc-500">
-            Dica: os primeiros jogos do NEXUS vão mandar pontos pra esse mesmo painel.
+            Dica: o ⚡ Quiz Relâmpago já está valendo esses pontos — jogue nas Salas e suba aqui!
           </p>
         </section>
       </main>
