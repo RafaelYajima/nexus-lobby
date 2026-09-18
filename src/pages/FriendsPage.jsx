@@ -73,7 +73,7 @@ function InviteChip() {
 export default function FriendsPage() {
   const { user } = useAuth()
   const { others } = usePresence()
-  const { unreadByFriend } = useUnread()
+  const { unreadByFriend, totalUnread, markAllRead } = useUnread()
   const {
     friends,
     incoming,
@@ -286,16 +286,27 @@ export default function FriendsPage() {
                 <h2 className="text-sm font-extrabold text-zinc-900 dark:text-zinc-50">
                   💙 Seus amigos
                 </h2>
-                {/* busca na lista */}
-                {friends.length > 4 && (
-                  <input
-                    type="text"
-                    value={listQuery}
-                    onChange={(e) => setListQuery(e.target.value)}
-                    placeholder="Filtrar por nome…"
-                    className="w-40 rounded-xl border border-zinc-200 bg-transparent px-3 py-1.5 text-xs text-zinc-700 placeholder-zinc-400 outline-none transition focus:border-violet-500 dark:border-white/10 dark:text-zinc-200"
-                  />
-                )}
+                <div className="flex items-center gap-2">
+                  {totalUnread > 0 && (
+                    <button
+                      type="button"
+                      onClick={markAllRead}
+                      className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-bold text-emerald-600 transition hover:bg-emerald-500/20 active:scale-95 dark:text-emerald-300"
+                    >
+                      ✓ Marcar tudo como lido
+                    </button>
+                  )}
+                  {/* busca na lista */}
+                  {friends.length > 4 && (
+                    <input
+                      type="text"
+                      value={listQuery}
+                      onChange={(e) => setListQuery(e.target.value)}
+                      placeholder="Filtrar por nome…"
+                      className="w-40 rounded-xl border border-zinc-200 bg-transparent px-3 py-1.5 text-xs text-zinc-700 placeholder-zinc-400 outline-none transition focus:border-violet-500 dark:border-white/10 dark:text-zinc-200"
+                    />
+                  )}
+                </div>
               </div>
 
               {/* chips de filtro rápido */}

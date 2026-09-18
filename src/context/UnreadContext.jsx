@@ -19,6 +19,10 @@ export function UnreadProvider({ children }) {
   const [available, setAvailable] = useState(true)
   const [unreadByFriend, setUnreadByFriend] = useState({}) // friendId -> nº não lidas
   const activeChatRef = useRef(null)
+  // leituras feitas NESTA sessão (merge contra corridas com o load inicial)
+  const localReadsRef = useRef({})
+  // dedupe de incremento realtime (StrictMode/reconexões)
+  const seenIdsRef = useRef(new Set())
 
   const setActiveChat = useCallback((friendId) => {
     activeChatRef.current = friendId
@@ -49,11 +53,19 @@ export function UnreadProvider({ children }) {
       if (cancelled || msErr) return
 
       const counts = {}
+      const local = localReadsRef.current
+      const newestOf = (a, b) => {
+        if (!a) return b
+        if (!b) return a
+        return Date.parse(a) >= Date.parse(b) ? a : b
+      }
       for (const m of ms ?? []) {
-        const last = readMap[m.sender_id]
+        const last = newestOf(readMap[m.sender_id], local[m.sender_id])
         if (!last || m.created_at > last) counts[m.sender_id] = (counts[m.sender_id] ?? 0) + 1
       }
-      setUnreadByFriend(counts)
+      // prioridade: contagens desta carga; prev mantém apenas incrementos vindos
+      // do realtime DEPOIS da leitura local (listener já filtra por localReads)
+      setUnreadByFriend((prev) => ({ ...counts, ...prev }))
     }
 
     load()
@@ -66,6 +78,11 @@ export function UnreadProvider({ children }) {
         ({ new: m }) => {
           if (m.recipient_id !== userId) return
           if (activeChatRef.current === m.sender_id) return // chat aberto: ChatPage marca lida
+          if (seenIdsRef.current.has(m.id)) return // dedupe (reconexões/StrictMode)
+          seenIdsRef.current.add(m.id)
+          if (seenIdsRef.current.size > 500) seenIdsRef.current = new Set([...seenIdsRef.current].slice(-500))
+          const lr = localReadsRef.current[m.sender_id]
+          if (lr && Date.parse(m.created_at) <= Date.parse(lr)) return // já lida nesta sessão
           setUnreadByFriend((prev) => ({
             ...prev,
             [m.sender_id]: (prev[m.sender_id] ?? 0) + 1,
@@ -83,12 +100,14 @@ export function UnreadProvider({ children }) {
   const markRead = useCallback(
     async (friendId) => {
       if (!userId || !friendId) return
+      const iso = new Date().toISOString()
+      localReadsRef.current[friendId] = iso
       setUnreadByFriend((prev) => ({ ...prev, [friendId]: 0 }))
       try {
         await supabase
           .from('chat_reads')
           .upsert(
-            { user_id: userId, other_user_id: friendId, last_read_at: new Date().toISOString() },
+            { user_id: userId, other_user_id: friendId, last_read_at: iso },
             { onConflict: 'user_id,other_user_id' }
           )
       } catch {
@@ -98,14 +117,20 @@ export function UnreadProvider({ children }) {
     [userId]
   )
 
+  /** Marca TODAS as conversas com não-lidas como lidas. */
+  const markAllRead = useCallback(async () => {
+    const keys = Object.keys(unreadByFriend).filter((k) => (unreadByFriend[k] ?? 0) > 0)
+    await Promise.all(keys.map((k) => markRead(k)))
+  }, [unreadByFriend, markRead])
+
   const totalUnread = useMemo(
     () => Object.values(unreadByFriend).reduce((acc, n) => acc + n, 0),
     [unreadByFriend]
   )
 
   const value = useMemo(
-    () => ({ available, unreadByFriend, totalUnread, setActiveChat, markRead }),
-    [available, unreadByFriend, totalUnread, setActiveChat, markRead]
+    () => ({ available, unreadByFriend, totalUnread, setActiveChat, markRead, markAllRead }),
+    [available, unreadByFriend, totalUnread, setActiveChat, markRead, markAllRead]
   )
 
   return <UnreadContext.Provider value={value}>{children}</UnreadContext.Provider>
