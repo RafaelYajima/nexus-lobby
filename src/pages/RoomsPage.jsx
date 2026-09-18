@@ -48,7 +48,7 @@ export default function RoomsPage() {
   return (
     <div className="min-h-screen bg-zinc-100 text-zinc-900 dark:bg-ink-950 dark:text-zinc-50">
       <AppHeader />
-      <main className="mx-auto w-full max-w-4xl space-y-6 px-4 py-8">
+      <main className="mx-auto w-full max-w-4xl space-y-6 px-4 pb-24 pt-8 md:pb-8">
         <h1 className="font-display text-2xl font-black tracking-tight">🎮 Salas</h1>
 
         {flash && (

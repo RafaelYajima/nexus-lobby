@@ -40,8 +40,18 @@ export default function QuizPanel({ quiz, members }) {
   } = quiz
 
   const [startMsg, setStartMsg] = useState('')
+  const [answerMsg, setAnswerMsg] = useState('') // erro visível do clique (antes era silencioso)
   const { remain, frac } = useCountdown(game?.question_started_at, !!game)
   const timedOut = !game ? false : remain <= 0
+
+  const onAnswer = async (i) => {
+    setAnswerMsg('')
+    const res = await answer(i)
+    if (!res.ok && res.message) {
+      setAnswerMsg(res.message)
+      setTimeout(() => setAnswerMsg(''), 4000)
+    }
+  }
 
   // minha resposta desta rodada: prioriza o que o servidor confirmou (linha gravada),
   // senão cai na resposta recém-retornada pela RPC (instantâneo pra UI)
@@ -166,7 +176,7 @@ export default function QuizPanel({ quiz, members }) {
                       key={i}
                       type="button"
                       disabled={locked}
-                      onClick={() => answer(i)}
+                      onClick={() => onAnswer(i)}
                       className={`flex items-center gap-3 rounded-2xl border px-3.5 py-3 text-left text-sm font-bold text-zinc-800 shadow-sm transition active:scale-[0.98] disabled:cursor-default dark:text-zinc-100 ${cls}`}
                     >
                       <span
@@ -212,6 +222,9 @@ export default function QuizPanel({ quiz, members }) {
                   <span className="text-zinc-400 dark:text-zinc-500">
                     Acerte rápido: o bônus de rapidez cai a cada segundo…
                   </span>
+                )}
+                {answerMsg && (
+                  <span className="mt-1 block text-rose-500">{answerMsg}</span>
                 )}
               </div>
             </div>

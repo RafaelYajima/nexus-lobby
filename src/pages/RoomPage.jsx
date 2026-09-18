@@ -144,9 +144,9 @@ export default function RoomPage() {
   return (
     <div className="flex min-h-screen flex-col bg-zinc-100 text-zinc-900 dark:bg-ink-950 dark:text-zinc-50">
       <AppHeader />
-      <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col px-4 py-6">
+      <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col px-4 pb-24 pt-6 md:pb-6">
         {/* header da sala */}
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <Link
             to="/salas"
             aria-label="Voltar para salas"
@@ -172,7 +172,7 @@ export default function RoomPage() {
                   {room.created_by === user?.id && ' · sala sua 👑'}
                 </p>
               </div>
-              <span className="ml-auto rounded-full bg-emerald-500/10 px-3 py-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
+              <span className="ml-auto whitespace-nowrap rounded-full bg-emerald-500/10 px-3 py-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
                 🟢 {inRoomNow.size} na sala
               </span>
             </>

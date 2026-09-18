@@ -226,9 +226,13 @@ export function useQuizGame(roomId, membersCount) {
         p_chosen: chosen,
       })
       if (error) {
+        if (/esgotado|encerrou/i.test(error.message || ''))
+          return { ok: false, message: '⏰ O servidor já tinha virado a rodada nesse instante.' }
         if (isMissingFn(error))
           return { ok: false, message: 'Rode a Migração v12 (SETUP.md) para responder.' }
-        return { ok: false } // tempo esgotado / rodada virou — o avanço cuida
+        // sem mais falha silenciosa: loga e devolve o motivo pra UI mostrar
+        console.warn('[quiz] quiz_answer falhou:', error)
+        return { ok: false, message: error.message || 'Não consegui registrar a resposta.' }
       }
 
       if (data?.correct) playQuizCorrect()

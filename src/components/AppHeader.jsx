@@ -6,6 +6,7 @@ import { useUnread } from '../context/UnreadContext'
 import { useProfile } from '../hooks/useProfile'
 import Logo from './Logo'
 import ThemeToggle from './ThemeToggle'
+import MobileNav from './MobileNav'
 import Spinner from './Spinner'
 import RoleBadge from './RoleBadge'
 
@@ -67,15 +68,16 @@ export default function AppHeader() {
   }
 
   return (
-    <header className="sticky top-0 z-30 border-b border-zinc-200/70 bg-white/75 backdrop-blur-xl dark:border-white/5 dark:bg-ink-950/75">
-      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6">
-        <div className="flex min-w-0 items-center gap-8">
-          <Link to="/lobby" className="flex items-center gap-3 transition hover:opacity-80">
-            <Logo size={34} withGlow={false} />
-            <span className="text-lg font-black tracking-[0.18em] text-zinc-900 dark:text-white">
-              NEXUS
-            </span>
-          </Link>
+    <>
+      <header className="sticky top-0 z-30 border-b border-zinc-200/70 bg-white/75 backdrop-blur-xl dark:border-white/5 dark:bg-ink-950/75">
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-2 px-4 sm:gap-4 sm:px-6">
+          <div className="flex min-w-0 items-center gap-8">
+            <Link to="/lobby" className="flex items-center gap-2 transition hover:opacity-80 sm:gap-3">
+              <Logo size={34} withGlow={false} />
+              <span className="hidden text-lg font-black tracking-[0.18em] text-zinc-900 sm:inline dark:text-white">
+                NEXUS
+              </span>
+            </Link>
 
           {/* nav principal — itens admOnly só renderizam para role adm */}
           <nav className="hidden items-center gap-1 md:flex" aria-label="Navegação principal">
@@ -125,13 +127,13 @@ export default function AppHeader() {
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-violet-600 to-cyan-500 text-sm font-bold text-white">
               {username.slice(0, 1).toUpperCase()}
             </span>
-            <span className="leading-tight">
-              <span className="flex items-center gap-1.5 text-sm font-semibold text-zinc-900 dark:text-white">
-                {username}
-                {tag && <span className="font-mono text-[11px] font-medium text-zinc-400 dark:text-zinc-500">#{tag}</span>}
+            <span className="hidden max-w-[34vw] leading-tight sm:block">
+              <span className="flex items-center gap-1.5 truncate text-sm font-semibold text-zinc-900 dark:text-white">
+                <span className="truncate">{username}</span>
+                {tag && <span className="shrink-0 font-mono text-[11px] font-medium text-zinc-400 dark:text-zinc-500">#{tag}</span>}
                 {role !== 'user' && <RoleBadge role={role} size="sm" />}
               </span>
-              <span className="hidden max-w-[150px] truncate text-[11px] text-zinc-400 sm:block dark:text-zinc-500">
+              <span className="hidden max-w-[150px] truncate text-[11px] text-zinc-400 md:block dark:text-zinc-500">
                 {user?.email}
               </span>
             </span>
@@ -145,7 +147,7 @@ export default function AppHeader() {
               strokeLinecap="round"
               strokeLinejoin="round"
               aria-hidden="true"
-              className="text-zinc-300 transition-all group-hover:translate-x-0.5 group-hover:text-violet-500 dark:text-zinc-600 dark:group-hover:text-violet-300"
+              className="hidden text-zinc-300 transition-all group-hover:translate-x-0.5 group-hover:text-violet-500 sm:block dark:text-zinc-600 dark:group-hover:text-violet-300"
             >
               <polyline points="9 18 15 12 9 6" />
             </svg>
@@ -163,5 +165,7 @@ export default function AppHeader() {
         </div>
       </div>
     </header>
+    <MobileNav />
+    </>
   )
 }
