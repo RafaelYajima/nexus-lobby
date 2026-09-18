@@ -94,7 +94,7 @@ export default function QuizPanel({ quiz, members }) {
           O Quiz Relâmpago ainda não foi ativado no banco
         </p>
         <p className="mx-auto mt-1 max-w-md text-xs text-zinc-500 dark:text-zinc-400">
-          Rode as <strong>Migrações v11 + v12</strong> (SETUP.md) no SQL Editor do Supabase.
+          Rode as <strong>Migrações v11 + v12 + v13</strong> (SETUP.md) no SQL Editor do Supabase.
         </p>
       </div>
     )

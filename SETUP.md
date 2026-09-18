@@ -1190,6 +1190,99 @@ insert into public.quiz_questions (id, q, options, answer) values
 
 Sem a v12: a aba quiz abre, mas iniciar/responder exibe "rode a Migração v12" — o app segue normal.
 
+## 🩹 Migração v13 — Correção: "infinite recursion" na room_members
+
+Se o chat/placar da sala ou o quiz mostram o 🔧 e o console/rede acusa
+**`infinite recursion detected in policy for relation "room_members"`**:
+a policy da v8 consultava a própria `room_members` dentro dela mesma — na
+verificação de permissão, o Postgres chamava a policy de novo pra subquery
+→ loop infinito. Rodar a v8 de novo não resolve (ela recria a mesma policy).
+
+Aqui a checagem vira a função **`is_room_member()`** (security definer — mesmo
+padrão anti-recursão do `is_adm()` lá do script base).
+
+> Pré-requisito: **v8** rodada (e v11/v12, se já tiver feito).
+
+```sql
+-- ========================================================
+-- MIGRAÇÃO v13 — Anti-recursão nas policies (idempotente)
+-- ========================================================
+
+-- 1) Funcao auxiliar: sou membro desta sala? ----------------------------
+create or replace function public.is_room_member(p_room_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1 from public.room_members m
+    where m.room_id = p_room_id and m.user_id = auth.uid()
+  );
+$$;
+
+revoke all on function public.is_room_member(uuid) from public;
+grant execute on function public.is_room_member(uuid) to authenticated;
+
+-- 2) room_members: policies novas (sem auto-referência → fim do loop) ---
+drop policy if exists "lista_membros_mesma_sala" on public.room_members;
+drop policy if exists "sai_ou_dono_expulsa"      on public.room_members;
+
+create policy "lista_membros_mesma_sala" on public.room_members
+  for select using (
+    user_id = auth.uid() or public.is_room_member(room_id)
+  );
+
+create policy "sai_ou_dono_expulsa" on public.room_members
+  for delete using (
+    user_id = auth.uid()
+    or exists (
+      select 1 from public.rooms r
+      where r.id = room_members.room_id and r.created_by = auth.uid()
+    )
+  );
+
+-- 3) room_messages: mesmas permissões, agora via função ------------------
+drop policy if exists "ve_mensagens_da_sala" on public.room_messages;
+drop policy if exists "manda_na_sala"        on public.room_messages;
+
+create policy "ve_mensagens_da_sala" on public.room_messages
+  for select using (public.is_room_member(room_id));
+
+create policy "manda_na_sala" on public.room_messages
+  for insert with check (
+    sender_id = auth.uid() and public.is_room_member(room_id)
+  );
+
+-- 4) Quiz: policies também passam pela função (padroniza tudo) -----------
+drop policy if exists "quiz: ve partidas da minha sala"    on public.quiz_games;
+drop policy if exists "quiz: ve respostas da minha sala"   on public.quiz_answers;
+
+create policy "quiz: ve partidas da minha sala" on public.quiz_games
+  for select using (public.is_room_member(room_id));
+
+create policy "quiz: ve respostas da minha sala" on public.quiz_answers
+  for select using (
+    exists (
+      select 1 from public.quiz_games g
+      where g.id = quiz_answers.game_id and public.is_room_member(g.room_id)
+    )
+  );
+```
+
+**Verificar:**
+
+```sql
+select policyname, tablename from pg_policies
+ where schemaname = 'public'
+   and tablename in ('room_members','room_messages','quiz_games','quiz_answers');
+```
+
+Depois basta **recarregar a página da sala**: membros, chat e quiz passam a
+carregar na hora. Se o quiz ainda mostrar 🔧 depois disso, aí sim são as
+migrações v11/v12 que faltam (o app avisa qual é).
+
 ## 🔑 Sobre a senha do adm (`123`)
 
 - Ela funciona porque foi gravada **direto no banco** (criptografada com bcrypt).

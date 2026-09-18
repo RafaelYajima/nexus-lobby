@@ -283,7 +283,7 @@ export default function RoomPage() {
                   <div className="py-12 text-center">
                     <p className="text-3xl">🔧</p>
                     <p className="mt-2 text-xs text-zinc-400 dark:text-zinc-500">
-                      O chat da sala precisa da <strong>Migração v8</strong> (SETUP.md).
+                      O chat da sala precisa das <strong>Migrações v8 + v13</strong> (SETUP.md).
                     </p>
                   </div>
                 )}
