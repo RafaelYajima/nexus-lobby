@@ -493,6 +493,135 @@ select * from public.chat_reads;  -- começa vazia; enche conforme você abre ch
 
 Sem a v7: badges nunca aparecem e o app segue normal (contadores ficam zerados localmente).
 
+## 🎮 Migração v8 — Salas de jogo (criar/entrar + chat de sala)
+
+Salas públicas com dono 👑 (só o dono fecha), lista de membros e chat em grupo com histórico e entrega instantânea. Presença "quem está na sala agora" roda por canal Realtime (não depende de tabela).
+
+```sql
+-- ========================================================
+-- MIGRAÇÃO v8 — Salas (idempotente)
+-- ========================================================
+
+create table if not exists public.rooms (
+  id         uuid primary key default gen_random_uuid(),
+  name       text not null check (char_length(trim(name)) between 2 and 40),
+  game_id    text not null,
+  created_by uuid not null references auth.users (id) on delete cascade,
+  status     text not null default 'open' check (status in ('open','closed')),
+  created_at timestamptz not null default now()
+);
+
+alter table public.rooms enable row level security;
+
+drop policy if exists "ve_salas_abertas"   on public.rooms;
+drop policy if exists "cria_sala"          on public.rooms;
+drop policy if exists "dono_fecha_sala"    on public.rooms;
+drop policy if exists "dono_remove_sala"   on public.rooms;
+
+create policy "ve_salas_abertas" on public.rooms
+  for select using (status = 'open' or created_by = auth.uid());
+
+create policy "cria_sala" on public.rooms
+  for insert with check (created_by = auth.uid());
+
+create policy "dono_fecha_sala" on public.rooms
+  for update using (created_by = auth.uid());
+
+create policy "dono_remove_sala" on public.rooms
+  for delete using (created_by = auth.uid());
+
+-- membros da sala
+create table if not exists public.room_members (
+  room_id   uuid not null references public.rooms (id) on delete cascade,
+  user_id   uuid not null references auth.users (id) on delete cascade,
+  joined_at timestamptz not null default now(),
+  primary key (room_id, user_id)
+);
+
+alter table public.room_members enable row level security;
+
+drop policy if exists "lista_membros_mesma_sala" on public.room_members;
+drop policy if exists "entra_na_sala"            on public.room_members;
+drop policy if exists "sai_ou_dono_expulsa"      on public.room_members;
+
+create policy "lista_membros_mesma_sala" on public.room_members
+  for select using (
+    exists (
+      select 1 from public.room_members m
+      where m.room_id = room_members.room_id and m.user_id = auth.uid()
+    )
+  );
+
+create policy "entra_na_sala" on public.room_members
+  for insert with check (user_id = auth.uid());
+
+create policy "sai_ou_dono_expulsa" on public.room_members
+  for delete using (
+    user_id = auth.uid()
+    or exists (
+      select 1 from public.rooms r
+      where r.id = room_members.room_id and r.created_by = auth.uid()
+    )
+  );
+
+-- chat da sala
+create table if not exists public.room_messages (
+  id         bigint generated always as identity primary key,
+  room_id    uuid not null references public.rooms (id) on delete cascade,
+  sender_id  uuid not null references auth.users (id) on delete cascade,
+  content    text not null check (char_length(content) between 1 and 500),
+  created_at timestamptz not null default now()
+);
+
+create index if not exists room_msgs_idx on public.room_messages (room_id, created_at desc);
+
+alter table public.room_messages enable row level security;
+
+drop policy if exists "ve_mensagens_da_sala" on public.room_messages;
+drop policy if exists "manda_na_sala"        on public.room_messages;
+
+create policy "ve_mensagens_da_sala" on public.room_messages
+  for select using (
+    exists (
+      select 1 from public.room_members m
+      where m.room_id = room_messages.room_id and m.user_id = auth.uid()
+    )
+  );
+
+create policy "manda_na_sala" on public.room_messages
+  for insert with check (
+    sender_id = auth.uid()
+    and exists (
+      select 1 from public.room_members m
+      where m.room_id = room_messages.room_id and m.user_id = auth.uid()
+    )
+  );
+
+-- Realtime nas tabelas novas (lista viva + chat instantâneo)
+do $$
+declare t text;
+begin
+  foreach t in array array['rooms','room_messages'] loop
+    if not exists (
+      select 1 from pg_publication_tables
+      where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t
+    ) then
+      execute format('alter publication supabase_realtime add table public.%I', t);
+    end if;
+  end loop;
+end $$;
+```
+
+**Verificar:**
+
+```sql
+select count(*) from public.rooms;
+select tablename from pg_publication_tables where pubname = 'supabase_realtime';
+-- deve listar: direct_messages, rooms, room_messages
+```
+
+Sem a v8: as páginas de Salas mostram o aviso 🔧 e todo o resto segue funcionando.
+
 ## 🔑 Sobre a senha do adm (`123`)
 
 - Ela funciona porque foi gravada **direto no banco** (criptografada com bcrypt).

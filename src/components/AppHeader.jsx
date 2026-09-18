@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { label: 'Lobby', to: '/lobby' },
   { label: 'Perfil', to: '/perfil' },
   { label: 'Amigos', to: '/amigos' },
+  { label: 'Salas', to: '/salas' },
   { label: 'Admin', to: '/admin', admOnly: true },
   { label: 'Loja', to: null },
   { label: 'Ranking', to: null },

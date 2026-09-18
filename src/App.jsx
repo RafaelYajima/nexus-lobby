@@ -4,6 +4,8 @@ import ResetPassword from './pages/ResetPassword'
 import Lobby from './pages/Lobby'
 import ProfilePage from './pages/ProfilePage'
 import ChatPage from './pages/ChatPage'
+import RoomsPage from './pages/RoomsPage'
+import RoomPage from './pages/RoomPage'
 import AdminPage from './pages/AdminPage'
 import FriendsPage from './pages/FriendsPage'
 import ProtectedRoute from './components/ProtectedRoute'
@@ -43,6 +45,22 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <ChatPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/salas"
+            element={
+              <ProtectedRoute>
+                <RoomsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/salas/:roomId"
+            element={
+              <ProtectedRoute>
+                <RoomPage />
               </ProtectedRoute>
             }
           />
