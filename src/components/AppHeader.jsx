@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { useSound } from '../context/SoundContext'
 import { useUnread } from '../context/UnreadContext'
 import { useProfile } from '../hooks/useProfile'
-import { isSoundEnabled, setSoundEnabled, playMessageDing } from '../lib/sound'
 import Logo from './Logo'
 import ThemeToggle from './ThemeToggle'
 import Spinner from './Spinner'
@@ -28,24 +28,18 @@ const IconLogout = () => (
   </svg>
 )
 
-/** Botão de ligar/desligar os sons de notificação (persistido no navegador). */
+/** Botão de ligar/desligar os sons de notificação (persistido na CONTA). */
 function SoundToggle() {
-  const [on, setOn] = useState(isSoundEnabled())
-  const toggle = () => {
-    const next = !on
-    setSoundEnabled(next)
-    setOn(next)
-    if (next) playMessageDing() // testeinha ao ligar
-  }
+  const { soundOn, toggle } = useSound()
   return (
     <button
       type="button"
       onClick={toggle}
-      title={on ? 'Desativar sons de notificação' : 'Ativar sons de notificação'}
-      aria-label={on ? 'Desativar sons' : 'Ativar sons'}
+      title={soundOn ? 'Desativar sons de notificação' : 'Ativar sons de notificação'}
+      aria-label={soundOn ? 'Desativar sons' : 'Ativar sons'}
       className="rounded-xl border border-zinc-200 bg-white/80 p-2.5 text-sm transition hover:border-violet-400/60 active:scale-95 dark:border-white/10 dark:bg-white/5"
     >
-      {on ? '🔊' : '🔇'}
+      {soundOn ? '🔊' : '🔇'}
     </button>
   )
 }

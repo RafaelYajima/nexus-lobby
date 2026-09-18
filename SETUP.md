@@ -668,6 +668,24 @@ Pontos: 🤝 10/amizade aceita · 💬 1/mensagem (DM+sala) · 🎮 15/sala cria
 
 Sem a v9: a página Ranking mostra o aviso 🔧 e o resto segue normal.
 
+## 🔊 Migração v10 — Preferência de som por conta
+
+Uma coluna pra o botão 🔊/🔇 (header) seguir a **conta** em qualquer dispositivo, aba anônima ou navegador.
+
+```sql
+-- Migração v10 — sound_enabled no perfil (idempotente)
+alter table public.profiles
+  add column if not exists sound_enabled boolean not null default true;
+```
+
+**Verificar:**
+
+```sql
+select username, sound_enabled from public.profiles;
+```
+
+Sem a v10: o app funciona, mas a preferência volta ao modo antigo (só no navegador atual).
+
 ## 🔑 Sobre a senha do adm (`123`)
 
 - Ela funciona porque foi gravada **direto no banco** (criptografada com bcrypt).

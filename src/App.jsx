@@ -1,5 +1,5 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
-import NotificationSounds from './components/NotificationSounds'
+import NotificationCenter from './components/NotificationCenter'
 import AuthPage from './pages/AuthPage'
 import ResetPassword from './pages/ResetPassword'
 import Lobby from './pages/Lobby'
@@ -16,7 +16,7 @@ import RequireAdm from './components/RequireAdm'
 export default function App() {
   return (
     <>
-      <NotificationSounds />
+      <NotificationCenter />
       <Routes>
       <Route path="/login" element={<AuthPage />} />
       <Route path="/reset-password" element={<ResetPassword />} />
