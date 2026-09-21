@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import AppHeader from '../components/AppHeader'
 import Spinner from '../components/Spinner'
 import { useAuth } from '../context/AuthContext'
 import { useRooms } from '../hooks/useRooms'
@@ -47,7 +46,6 @@ export default function RoomsPage() {
 
   return (
     <div className="min-h-screen bg-zinc-100 text-zinc-900 dark:bg-ink-950 dark:text-zinc-50">
-      <AppHeader />
       <main className="mx-auto w-full max-w-4xl space-y-6 px-4 pb-24 pt-8 lg:pb-8">
         <h1 className="font-display text-2xl font-black tracking-tight">🏰 Servidores</h1>
 

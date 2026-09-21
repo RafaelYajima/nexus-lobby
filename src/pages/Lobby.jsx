@@ -1,5 +1,4 @@
 import { Link } from 'react-router-dom'
-import AppHeader from '../components/AppHeader'
 import FriendsOnlineStrip from '../components/lobby/FriendsOnlineStrip'
 import { useAuth } from '../context/AuthContext'
 import { useProfile } from '../hooks/useProfile'
@@ -57,7 +56,6 @@ export default function Lobby() {
       <div className="pointer-events-none absolute inset-0 bg-grid [mask-image:radial-gradient(ellipse_at_top,black_20%,transparent_70%)]" aria-hidden="true" />
       <div className="pointer-events-none absolute -top-24 left-1/2 h-80 w-80 -translate-x-1/2 rounded-full bg-violet-500/15 blur-[120px]" aria-hidden="true" />
 
-      <AppHeader />
 
       <main className="relative mx-auto max-w-7xl px-4 pb-24 pt-8 sm:px-6 lg:pb-16">
         {/* saudação */}

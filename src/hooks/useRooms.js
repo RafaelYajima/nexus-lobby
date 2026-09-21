@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import { translateError } from '../utils/errors'
@@ -45,17 +45,21 @@ export function useRooms() {
     load()
   }, [load])
 
+  // id único por montagem: o shell (trilha + sidebar) e a página /salas podem
+  // usar o hook ao mesmo tempo — o Supabase rejeita dois canais com o mesmo tópico
+  const instanceTag = useMemo(() => Math.random().toString(36).slice(2, 10), [])
+
   // lista viva: novas salas/fechadas aparecem sem refresh
   useEffect(() => {
     if (!user || blocked || !isSupabaseConfigured) return undefined
     const ch = supabase
-      .channel('rooms:list')
+      .channel(`rooms:list:${instanceTag}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms' }, () => load())
       .subscribe()
     return () => {
       supabase.removeChannel(ch)
     }
-  }, [user, blocked, load])
+  }, [user, blocked, load, instanceTag])
 
   const create = useCallback(
     async ({ name, gameId }) => {

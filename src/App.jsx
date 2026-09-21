@@ -12,82 +12,43 @@ import AdminPage from './pages/AdminPage'
 import FriendsPage from './pages/FriendsPage'
 import ProtectedRoute from './components/ProtectedRoute'
 import RequireAdm from './components/RequireAdm'
+import DiscordShell from './layout/DiscordShell'
 
+// 🧱 Cap. 1.5: dentro da casca estilo Discord — as rotas protegidas vivem todas
+// dentro do shell (trilha de servidores + coluna de contexto + painel do usuário em lg+;
+// layout mobile intacto abaixo disso).
 export default function App() {
   return (
     <>
       <NotificationCenter />
       <Routes>
-      <Route path="/login" element={<AuthPage />} />
-      <Route path="/reset-password" element={<ResetPassword />} />
-      <Route
-        path="/lobby"
-        element={
-          <ProtectedRoute>
-            <Lobby />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-            path="/perfil"
-            element={
-              <ProtectedRoute>
-                <ProfilePage />
-              </ProtectedRoute>
-            }
-          />
+        <Route path="/login" element={<AuthPage />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
+        <Route
+          element={
+            <ProtectedRoute>
+              <DiscordShell />
+            </ProtectedRoute>
+          }
+        >
+          <Route path="/lobby" element={<Lobby />} />
+          <Route path="/perfil" element={<ProfilePage />} />
+          <Route path="/amigos" element={<FriendsPage />} />
+          <Route path="/chat/:friendId" element={<ChatPage />} />
+          <Route path="/salas" element={<RoomsPage />} />
+          <Route path="/salas/:roomId" element={<RoomPage />} />
+          <Route path="/ranking" element={<RankingPage />} />
           <Route
-            path="/amigos"
+            path="/admin"
             element={
-              <ProtectedRoute>
-                <FriendsPage />
-              </ProtectedRoute>
+              <RequireAdm>
+                <AdminPage />
+              </RequireAdm>
             }
           />
-          <Route
-            path="/chat/:friendId"
-            element={
-              <ProtectedRoute>
-                <ChatPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/salas"
-            element={
-              <ProtectedRoute>
-                <RoomsPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/salas/:roomId"
-            element={
-              <ProtectedRoute>
-                <RoomPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/ranking"
-            element={
-              <ProtectedRoute>
-                <RankingPage />
-              </ProtectedRoute>
-            }
-          />
-      <Route
-        path="/admin"
-        element={
-          <ProtectedRoute>
-            <RequireAdm>
-              <AdminPage />
-            </RequireAdm>
-          </ProtectedRoute>
-        }
-      />
-      <Route path="/" element={<Navigate to="/lobby" replace />} />
-      <Route path="*" element={<Navigate to="/lobby" replace />} />
+        </Route>
+        <Route path="/" element={<Navigate to="/lobby" replace />} />
+        <Route path="*" element={<Navigate to="/lobby" replace />} />
       </Routes>
     </>
   )

@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import AppHeader from '../components/AppHeader'
 import Spinner from '../components/Spinner'
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient'
 import { useAuth } from '../context/AuthContext'
@@ -146,14 +145,13 @@ export default function RoomPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-zinc-100 text-zinc-900 dark:bg-ink-950 dark:text-zinc-50">
-      <AppHeader />
       <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col px-4 pb-24 pt-6 lg:pb-6">
         {/* header da sala */}
         <div className="flex flex-wrap items-center gap-3">
           <Link
             to="/salas"
             aria-label="Voltar para servidores"
-            className="rounded-xl border border-zinc-200 px-3 py-2 text-xs font-bold text-zinc-500 transition hover:border-violet-400/50 hover:text-zinc-700 dark:border-white/10 dark:text-zinc-400 dark:hover:text-zinc-200"
+            className="rounded-xl border border-zinc-200 px-3 py-2 text-xs font-bold text-zinc-500 transition hover:border-violet-400/50 hover:text-zinc-700 dark:border-white/10 dark:text-zinc-400 dark:hover:text-zinc-200 lg:hidden"
           >
             ← Servidores
           </Link>

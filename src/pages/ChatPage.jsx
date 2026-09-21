@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import AppHeader from '../components/AppHeader'
 import Spinner from '../components/Spinner'
 import RoleBadge from '../components/RoleBadge'
 import { useAuth } from '../context/AuthContext'
@@ -86,7 +85,6 @@ export default function ChatPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-zinc-100 text-zinc-900 dark:bg-ink-950 dark:text-zinc-50">
-      <AppHeader />
       <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 pb-24 pt-6 lg:pb-6">
         {/* header do chat */}
         <div className="flex items-center gap-3">

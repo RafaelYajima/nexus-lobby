@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react'
-import AppHeader from '../components/AppHeader'
 import RoleBadge from '../components/RoleBadge'
 import Spinner from '../components/Spinner'
 import { useAuth } from '../context/AuthContext'
@@ -129,7 +128,6 @@ export default function AdminPage() {
       <div className="pointer-events-none absolute inset-0 bg-grid [mask-image:radial-gradient(ellipse_at_top,black_20%,transparent_70%)]" aria-hidden="true" />
       <div className="pointer-events-none absolute -top-24 left-1/2 h-80 w-80 -translate-x-1/2 rounded-full bg-fuchsia-500/10 blur-[120px]" aria-hidden="true" />
 
-      <AppHeader />
 
       <main className="relative mx-auto max-w-7xl px-4 pb-24 pt-8 sm:px-6 lg:pb-16">
         {/* título */}
