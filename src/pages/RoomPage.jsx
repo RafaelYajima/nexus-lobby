@@ -14,7 +14,10 @@ import { dayLabel, timeLabel } from '../utils/time'
 
 const gameOf = (id) => GAMES.find((g) => g.id === id)
 
-/** Dentro da sala: membros (ao vivo) + chat do grupo. */
+// 🧊 pivot Discord: Quiz fica escondido por ora (volta como extra num capítulo futuro)
+const QUIZ_ENABLED = false
+
+/** Dentro do servidor: membros (ao vivo) + chat de texto. */
 export default function RoomPage() {
   const { roomId } = useParams()
   const { user } = useAuth()
@@ -35,7 +38,7 @@ export default function RoomPage() {
 
   // quiz roda após os states (members precisa existir antes)
   const quiz = useQuizGame(roomId, members.length)
-  const quizLive = !!quiz.game // partida rolando (para o badge pulsante da aba)
+  const quizLive = QUIZ_ENABLED && !!quiz.game // badge pulsante da aba (quando o quiz voltar)
 
   const username =
     profile?.username || user?.user_metadata?.username || user?.email?.split('@')[0] || 'jogador'
@@ -149,31 +152,27 @@ export default function RoomPage() {
         <div className="flex flex-wrap items-center gap-3">
           <Link
             to="/salas"
-            aria-label="Voltar para salas"
+            aria-label="Voltar para servidores"
             className="rounded-xl border border-zinc-200 px-3 py-2 text-xs font-bold text-zinc-500 transition hover:border-violet-400/50 hover:text-zinc-700 dark:border-white/10 dark:text-zinc-400 dark:hover:text-zinc-200"
           >
-            ← Salas
+            ← Servidores
           </Link>
           {room ? (
             <>
-              <span
-                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br text-lg shadow ${
-                  game?.accent ?? 'from-zinc-500 to-zinc-700'
-                }`}
-              >
-                {game?.emoji ?? '🎮'}
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-600 to-fuchsia-500 text-lg shadow">
+                🏰
               </span>
               <div className="min-w-0">
                 <p className="truncate text-sm font-extrabold text-zinc-900 dark:text-zinc-50">
                   {room.name}
                 </p>
                 <p className="text-[11px] text-zinc-400 dark:text-zinc-500">
-                  {game?.name ?? room.game_id}
-                  {room.created_by === user?.id && ' · sala sua 👑'}
+                  {game?.name ?? 'Servidor de texto'}
+                  {room.created_by === user?.id && ' · servidor seu 👑'}
                 </p>
               </div>
               <span className="ml-auto whitespace-nowrap rounded-full bg-emerald-500/10 px-3 py-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
-                🟢 {inRoomNow.size} na sala
+                🟢 {inRoomNow.size} online aqui
               </span>
             </>
           ) : loadingRoom ? (
@@ -185,13 +184,13 @@ export default function RoomPage() {
           <section className="mt-6 rounded-3xl border border-zinc-200 bg-white p-8 text-center shadow-soft dark:border-white/10 dark:bg-ink-900">
             <p className="text-3xl">🚪</p>
             <p className="mt-2 text-sm font-extrabold text-zinc-800 dark:text-zinc-100">
-              Essa sala não existe (ou foi fechada)
+              Esse servidor não existe (ou foi fechado)
             </p>
             <Link
               to="/salas"
               className="mt-4 inline-block rounded-xl bg-violet-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-violet-500"
             >
-              Ver salas abertas
+              Ver servidores abertos
             </Link>
           </section>
         ) : (
@@ -236,9 +235,9 @@ export default function RoomPage() {
               </ul>
             </aside>
 
-            {/* chat / quiz */}
+            {/* chat (abas do quiz retornam com os jogos — QUIZ_ENABLED) */}
             <section className="order-1 flex flex-col sm:order-2">
-              {/* abas */}
+              {QUIZ_ENABLED && (
               <div className="mb-3 inline-flex items-center self-start rounded-2xl border border-zinc-200 bg-white p-1 dark:border-white/10 dark:bg-ink-900">
                 <button
                   type="button"
@@ -269,8 +268,9 @@ export default function RoomPage() {
                   )}
                 </button>
               </div>
+              )}
 
-              {tab === 'quiz' ? (
+              {QUIZ_ENABLED && tab === 'quiz' ? (
                 <QuizPanel quiz={quiz} members={members} />
               ) : (
                 <>
@@ -283,7 +283,7 @@ export default function RoomPage() {
                   <div className="py-12 text-center">
                     <p className="text-3xl">🔧</p>
                     <p className="mt-2 text-xs text-zinc-400 dark:text-zinc-500">
-                      O chat da sala precisa das <strong>Migrações v8 + v13</strong> (SETUP.md).
+                      O chat deste servidor precisa das <strong>Migrações v8 + v13</strong> (SETUP.md).
                     </p>
                   </div>
                 )}
@@ -291,7 +291,7 @@ export default function RoomPage() {
                   <div className="py-12 text-center">
                     <p className="text-3xl">🗨️</p>
                     <p className="mt-2 text-xs text-zinc-400 dark:text-zinc-500">
-                      Sala silenciosa… quebra o gelo aí!
+                      Servidor silencioso… quebra o gelo #geral!
                     </p>
                   </div>
                 )}
@@ -360,7 +360,7 @@ export default function RoomPage() {
                       onChange={(e) => setDraft(e.target.value)}
                       onKeyDown={onKeyDown}
                       rows={1}
-                      placeholder="Mensagem para a sala…"
+                      placeholder="Mensagem no servidor…"
                       className="max-h-32 w-full resize-none rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-800 placeholder-zinc-400 shadow-soft outline-none transition focus:border-violet-500 focus:ring-2 focus:ring-violet-500/30 dark:border-white/10 dark:bg-ink-900 dark:text-zinc-100"
                     />
                     <button

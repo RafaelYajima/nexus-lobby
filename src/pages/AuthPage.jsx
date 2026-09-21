@@ -214,7 +214,7 @@ export default function AuthPage() {
               NEXUS
             </h1>
             <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-              Sua arena de jogos em um só lugar
+              Converse, chame a galera, jogue junto
             </p>
           </div>
 

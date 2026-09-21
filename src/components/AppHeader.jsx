@@ -11,15 +11,14 @@ import Spinner from './Spinner'
 import RoleBadge from './RoleBadge'
 
 const NAV_ITEMS = [
-  { label: 'Lobby', to: '/lobby' },
+  { label: 'Início', to: '/lobby' },
   { label: 'Amigos', to: '/amigos' },
-  { label: 'Salas', to: '/salas' },
+  { label: 'Servidores', to: '/salas' },
   { label: 'Admin', to: '/admin', admOnly: true },
-  { label: 'Ranking', to: '/ranking' },
-  // extras (placeholders ou duplicado do chip): só em telas bem largas
+  // extras (jogos pausados / placeholders): só em telas bem largas
+  { label: 'Ranking', to: '/ranking', extra: true },
   { label: 'Perfil', to: '/perfil', extra: true },
   { label: 'Loja', to: null, extra: true },
-  { label: 'Comunidade', to: null, extra: true },
 ]
 
 const IconLogout = () => (

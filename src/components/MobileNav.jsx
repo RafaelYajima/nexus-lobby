@@ -6,10 +6,10 @@ import { useUnread } from '../context/UnreadContext'
  * abaixo de md). Renderiza de páginas logadas via AppHeader.
  */
 const ITEMS = [
-  { to: '/lobby', icon: '🏠', label: 'Lobby' },
+  { to: '/lobby', icon: '🏠', label: 'Início' },
   { to: '/amigos', icon: '👥', label: 'Amigos' },
-  { to: '/salas', icon: '🎮', label: 'Salas' },
-  { to: '/ranking', icon: '🏆', label: 'Ranking' },
+  { to: '/salas', icon: '🏰', label: 'Servidores' },
+  { to: '/perfil', icon: '⚙️', label: 'Perfil' },
 ]
 
 export default function MobileNav() {
