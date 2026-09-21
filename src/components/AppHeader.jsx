@@ -12,13 +12,14 @@ import RoleBadge from './RoleBadge'
 
 const NAV_ITEMS = [
   { label: 'Lobby', to: '/lobby' },
-  { label: 'Perfil', to: '/perfil' },
   { label: 'Amigos', to: '/amigos' },
   { label: 'Salas', to: '/salas' },
   { label: 'Admin', to: '/admin', admOnly: true },
-  { label: 'Loja', to: null },
   { label: 'Ranking', to: '/ranking' },
-  { label: 'Comunidade', to: null },
+  // extras (placeholders ou duplicado do chip): só em telas bem largas
+  { label: 'Perfil', to: '/perfil', extra: true },
+  { label: 'Loja', to: null, extra: true },
+  { label: 'Comunidade', to: null, extra: true },
 ]
 
 const IconLogout = () => (
@@ -79,38 +80,50 @@ export default function AppHeader() {
               </span>
             </Link>
 
-          {/* nav principal — itens admOnly só renderizam para role adm */}
-          <nav className="hidden items-center gap-1 md:flex" aria-label="Navegação principal">
-            {NAV_ITEMS.filter((item) => !item.admOnly || role === 'adm').map((item) =>
-              item.to ? (
-                <NavLink
-                  key={item.label}
-                  to={item.to}
-                  className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors ${
-                    pathname.startsWith(item.to)
-                      ? 'bg-violet-500/10 text-violet-600 dark:bg-violet-400/10 dark:text-violet-300'
-                      : 'text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200'
-                  }`}
-                >
-                  <span className="inline-flex items-center">
+          {/* nav principal — só em telas lg+; abaixo disso manda a MobileNav */}
+          <nav className="hidden items-center gap-1 lg:flex" aria-label="Navegação principal">
+            {[
+              ...NAV_ITEMS.filter((i) => !i.extra),
+              ...NAV_ITEMS.filter((i) => i.extra),
+            ]
+              .filter((item) => !item.admOnly || role === 'adm')
+              .map((item) => {
+                const tag2 = item.to ? (
+                  <NavLink
+                    key={item.label}
+                    to={item.to}
+                    className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors ${
+                      pathname.startsWith(item.to)
+                        ? 'bg-violet-500/10 text-violet-600 dark:bg-violet-400/10 dark:text-violet-300'
+                        : 'text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200'
+                    }`}
+                  >
+                    <span className="inline-flex items-center">
+                      {item.label}
+                      {item.to === '/amigos' && totalUnread > 0 && (
+                        <span className="ml-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-black text-white shadow">
+                          {totalUnread > 9 ? '9+' : totalUnread}
+                        </span>
+                      )}
+                    </span>
+                  </NavLink>
+                ) : (
+                  <span
+                    key={item.label}
+                    title="Em breve"
+                    className="cursor-not-allowed rounded-lg px-3 py-1.5 text-sm font-semibold text-zinc-300 dark:text-zinc-700"
+                  >
                     {item.label}
-                    {item.to === '/amigos' && totalUnread > 0 && (
-                      <span className="ml-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-black text-white shadow">
-                        {totalUnread > 9 ? '9+' : totalUnread}
-                      </span>
-                    )}
                   </span>
-                </NavLink>
-              ) : (
-                <span
-                  key={item.label}
-                  title="Em breve"
-                  className="cursor-not-allowed rounded-lg px-3 py-1.5 text-sm font-semibold text-zinc-300 dark:text-zinc-700"
-                >
-                  {item.label}
-                </span>
-              )
-            )}
+                )
+                return item.extra ? (
+                  <span key={`x-${item.label}`} className="hidden xl:contents">
+                    {tag2}
+                  </span>
+                ) : (
+                  tag2
+                )
+              })}
           </nav>
         </div>
 
@@ -127,13 +140,13 @@ export default function AppHeader() {
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-violet-600 to-cyan-500 text-sm font-bold text-white">
               {username.slice(0, 1).toUpperCase()}
             </span>
-            <span className="hidden max-w-[34vw] leading-tight sm:block">
+            <span className="hidden max-w-[30vw] leading-tight lg:block">
               <span className="flex items-center gap-1.5 truncate text-sm font-semibold text-zinc-900 dark:text-white">
                 <span className="truncate">{username}</span>
                 {tag && <span className="shrink-0 font-mono text-[11px] font-medium text-zinc-400 dark:text-zinc-500">#{tag}</span>}
                 {role !== 'user' && <RoleBadge role={role} size="sm" />}
               </span>
-              <span className="hidden max-w-[150px] truncate text-[11px] text-zinc-400 md:block dark:text-zinc-500">
+              <span className="hidden max-w-[150px] truncate text-[11px] text-zinc-400 xl:block dark:text-zinc-500">
                 {user?.email}
               </span>
             </span>
@@ -147,7 +160,7 @@ export default function AppHeader() {
               strokeLinecap="round"
               strokeLinejoin="round"
               aria-hidden="true"
-              className="hidden text-zinc-300 transition-all group-hover:translate-x-0.5 group-hover:text-violet-500 sm:block dark:text-zinc-600 dark:group-hover:text-violet-300"
+              className="hidden text-zinc-300 transition-all group-hover:translate-x-0.5 group-hover:text-violet-500 lg:block dark:text-zinc-600 dark:group-hover:text-violet-300"
             >
               <polyline points="9 18 15 12 9 6" />
             </svg>

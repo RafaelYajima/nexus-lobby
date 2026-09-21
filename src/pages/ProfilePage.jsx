@@ -106,7 +106,7 @@ export default function ProfilePage() {
 
       <AppHeader />
 
-      <main className="relative mx-auto max-w-7xl px-4 pb-24 pt-8 sm:px-6 md:pb-16">
+      <main className="relative mx-auto max-w-7xl px-4 pb-24 pt-8 sm:px-6 lg:pb-16">
         <section className="mb-6">
           <h1 className="text-3xl font-black tracking-tight text-zinc-900 sm:text-4xl dark:text-white">
             Meu <span className="text-gradient">perfil</span>

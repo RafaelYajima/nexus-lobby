@@ -87,7 +87,7 @@ export default function ChatPage() {
   return (
     <div className="flex min-h-screen flex-col bg-zinc-100 text-zinc-900 dark:bg-ink-950 dark:text-zinc-50">
       <AppHeader />
-      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 pb-24 pt-6 md:pb-6">
+      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 pb-24 pt-6 lg:pb-6">
         {/* header do chat */}
         <div className="flex items-center gap-3">
           <Link

@@ -17,7 +17,7 @@ export default function MobileNav() {
   return (
     <nav
       aria-label="Navegação móvel"
-      className="fixed inset-x-0 bottom-0 z-30 border-t border-zinc-200/70 bg-white/85 backdrop-blur-xl dark:border-white/5 dark:bg-ink-950/85 md:hidden"
+      className="fixed inset-x-0 bottom-0 z-30 border-t border-zinc-200/70 bg-white/85 backdrop-blur-xl dark:border-white/5 dark:bg-ink-950/85 lg:hidden"
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
     >
       <div className="grid grid-cols-4">

@@ -52,7 +52,7 @@ export default function RankingPage() {
   return (
     <div className="min-h-screen bg-zinc-100 text-zinc-900 dark:bg-ink-950 dark:text-zinc-50">
       <AppHeader />
-      <main className="mx-auto w-full max-w-3xl space-y-6 px-4 pb-24 pt-8 md:pb-8">
+      <main className="mx-auto w-full max-w-3xl space-y-6 px-4 pb-24 pt-8 lg:pb-8">
         <div className="flex items-center justify-between">
           <h1 className="font-display text-2xl font-black tracking-tight">🏆 Ranking</h1>
           <button

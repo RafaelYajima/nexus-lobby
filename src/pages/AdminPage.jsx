@@ -131,7 +131,7 @@ export default function AdminPage() {
 
       <AppHeader />
 
-      <main className="relative mx-auto max-w-7xl px-4 pb-24 pt-8 sm:px-6 md:pb-16">
+      <main className="relative mx-auto max-w-7xl px-4 pb-24 pt-8 sm:px-6 lg:pb-16">
         {/* título */}
         <section className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div>

@@ -36,7 +36,7 @@ export default function Lobby() {
 
       <AppHeader />
 
-      <main className="relative mx-auto max-w-7xl px-4 pb-24 pt-8 sm:px-6 md:pb-16">
+      <main className="relative mx-auto max-w-7xl px-4 pb-24 pt-8 sm:px-6 lg:pb-16">
         {/* saudação */}
         <section className="mb-6 flex flex-wrap items-end justify-between gap-3">
           <div>
