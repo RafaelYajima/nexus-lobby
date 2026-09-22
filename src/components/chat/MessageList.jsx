@@ -90,7 +90,7 @@ export default function MessageList({
             )}
 
             <div
-              className={`group -mx-2 flex gap-3 rounded-xl px-2 py-1 transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.04] ${
+              className={`group flex gap-3 rounded-xl px-2 py-1 transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.04] ${
                 grouped ? '' : 'mt-2'
               } ${mine ? 'flex-row-reverse' : ''}`}
             >
@@ -128,7 +128,6 @@ export default function MessageList({
                       }`}
                     >
                       {author.username ?? 'jogador'}
-                      {mine && <span className="text-zinc-400"> (você)</span>}
                     </span>
                     {author.tag && (
                       <span className="font-mono text-[10px] text-zinc-400">#{author.tag}</span>
