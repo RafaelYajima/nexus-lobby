@@ -1,5 +1,7 @@
 # ⚡ NEXUS — Sua arena de jogos
 
+**🌐 Produção:** https://nexus-lobby-rho.vercel.app (auto-deploy da branch `main` via Vercel)
+
 Plataforma de lobby de jogos com autenticação completa, papéis de usuário
 (**adm / mod / jogador**) e tema claro/escuro salvo por conta.
 
