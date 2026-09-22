@@ -26,7 +26,7 @@ export default function DiscordShell() {
     <div className="flex h-screen w-full overflow-hidden bg-white text-zinc-900 dark:bg-ink-950 dark:text-zinc-50">
       <ServerRail />
       <ContextSidebar />
-      <main className="relative flex-1 overflow-y-auto bg-zinc-100 dark:bg-ink-900/30">
+      <main className="relative min-w-0 flex-1 overflow-y-auto bg-zinc-100 dark:bg-ink-900/30">
         <div className="flex min-h-full flex-col">
           <Outlet />
         </div>

@@ -83,7 +83,7 @@ export default function ContextSidebar() {
   )
 
   return (
-    <aside className="flex w-64 shrink-0 flex-col border-r border-zinc-200/70 bg-white/60 dark:border-white/5 dark:bg-ink-900/60">
+    <aside className="flex w-[clamp(13rem,22vw,16rem)] shrink-0 flex-col border-r border-zinc-200/70 bg-white/60 dark:border-white/5 dark:bg-ink-900/60">
       {inServer ? (
         <>
           <header className="flex h-14 shrink-0 items-center gap-2 border-b border-zinc-200/70 px-4 dark:border-white/5">

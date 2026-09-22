@@ -17,7 +17,7 @@ export default function ActivityRail() {
   const friendById = Object.fromEntries(friends.map((f) => [f.userId, f]))
 
   return (
-    <aside className="hidden w-72 shrink-0 flex-col border-l border-zinc-200/70 bg-white/40 dark:border-white/5 dark:bg-ink-900/40 xl:flex">
+    <aside className="hidden min-[1150px]:flex w-[clamp(13rem,20vw,18rem)] shrink-0 flex-col border-l border-zinc-200/70 bg-white/40 dark:border-white/5 dark:bg-ink-900/40">
       <header className="flex h-14 shrink-0 items-center border-b border-zinc-200/70 px-4 dark:border-white/5">
         <p className="text-xs font-black uppercase tracking-widest text-zinc-500 dark:text-zinc-400">
           Ativo agora
