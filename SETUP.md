@@ -1322,3 +1322,114 @@ Em **Authentication** → **URL Configuration** (para o "esqueci a senha"):
 | "relation public.profiles does not exist" | Script SQL ainda não foi executado |
 | adm não consegue entrar | Passo 6 do script falhou — me mande o erro do SQL Editor |
 | "Confirme seu e-mail antes de entrar" | Cadastro feito com *Confirm email* ativo — desative ou confirme no e-mail |
+
+---
+
+## 🧩 Migração v14 — Canais de texto e voz por servidor
+
+Adiciona a tabela **`room_channels`** (cada servidor pode ter vários canais de
+texto 💬 e de voz 🔊) e amarra as mensagens a um canal (`room_messages.channel_id`).
+
+> Sem esta migração o app continua funcionando exatamente como antes: cada
+> servidor fica com um único **💬 geral** implícito. Depois de rodar, o dono
+> passa a gerenciar canais no ⚙️ do servidor (sidebar e cabeçalho da sala).
+
+> Pré-requisito: **v8 + v13** rodadas.
+
+```sql
+-- ========================================================
+-- MIGRAÇÃO v14 — Canais por servidor (idempotente)
+-- ========================================================
+
+-- 1) Tabela de canais ---------------------------------------------------
+create table if not exists public.room_channels (
+  id         uuid primary key default gen_random_uuid(),
+  room_id    uuid not null references public.rooms(id) on delete cascade,
+  type       text not null default 'text' check (type in ('text','voice')),
+  name       text not null check (char_length(name) between 2 and 24),
+  position   integer not null default 0,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists room_channels_room_idx
+  on public.room_channels (room_id, position, created_at);
+
+-- 2) Mensagens ganham canal (legado: tudo vai pro primeiro canal de texto)
+alter table public.room_messages
+  add column if not exists channel_id uuid
+    references public.room_channels(id) on delete cascade;
+
+-- 3) Todo servidor recebe um canal "geral" de texto (se ainda não tiver)
+insert into public.room_channels (room_id, type, name, position)
+select r.id, 'text', 'geral', 0
+from public.rooms r
+where not exists (
+  select 1 from public.room_channels c
+  where c.room_id = r.id and c.type = 'text'
+);
+
+-- 3b) Todo servidor recebe um canal de voz padrão (o cap. 2 usa ele) 🔊
+insert into public.room_channels (room_id, type, name, position)
+select r.id, 'voice', 'sala de voz', 1
+from public.rooms r
+where not exists (
+  select 1 from public.room_channels c
+  where c.room_id = r.id and c.type = 'voice'
+);
+
+-- 4) Mensagens antigas entram no primeiro canal de texto da sala
+update public.room_messages m
+set channel_id = (
+  select c.id
+  from public.room_channels c
+  where c.room_id = m.room_id and c.type = 'text'
+  order by c.position asc, c.created_at asc
+  limit 1
+)
+where m.channel_id is null
+  and exists (
+    select 1 from public.room_channels c
+    where c.room_id = m.room_id and c.type = 'text'
+  );
+
+-- 5) Segurança (RLS): membro lê canais; dono gerencia -------------------
+alter table public.room_channels enable row level security;
+
+drop policy if exists "ve_canais_da_sala"    on public.room_channels;
+drop policy if exists "dono_gerencia_canais" on public.room_channels;
+
+create policy "ve_canais_da_sala" on public.room_channels
+  for select using (public.is_room_member(room_id));
+
+create policy "dono_gerencia_canais" on public.room_channels
+  for all using (
+    exists (
+      select 1 from public.rooms r
+      where r.id = room_channels.room_id and r.created_by = auth.uid()
+    )
+  ) with check (
+    exists (
+      select 1 from public.rooms r
+      where r.id = room_channels.room_id and r.created_by = auth.uid()
+    )
+  );
+
+-- 6) Realtime: sidebar de canais atualiza ao vivo -----------------------
+do $$
+begin
+  alter publication supabase_realtime add table public.room_channels;
+exception
+  when duplicate_object then null;
+end $$;
+```
+
+**Verificar:**
+
+```sql
+select tablename, policyname from pg_policies
+ where schemaname = 'public' and tablename = 'room_channels';
+select id, room_id, type, name from public.room_channels order by created_at;
+```
+
+Se aparecer `ERROR: relation "public.is_room_member" does not exist`, rode a
+**v13** antes (ela cria a função anti-recursão).

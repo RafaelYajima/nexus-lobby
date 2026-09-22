@@ -8,6 +8,7 @@ import ChatPage from './pages/ChatPage'
 import RankingPage from './pages/RankingPage'
 import RoomsPage from './pages/RoomsPage'
 import RoomPage from './pages/RoomPage'
+import RoomSettingsPage from './pages/RoomSettingsPage'
 import AdminPage from './pages/AdminPage'
 import FriendsPage from './pages/FriendsPage'
 import ProtectedRoute from './components/ProtectedRoute'
@@ -37,6 +38,8 @@ export default function App() {
           <Route path="/chat/:friendId" element={<ChatPage />} />
           <Route path="/salas" element={<RoomsPage />} />
           <Route path="/salas/:roomId" element={<RoomPage />} />
+          <Route path="/salas/:roomId/c/:channelId" element={<RoomPage />} />
+          <Route path="/salas/:roomId/config" element={<RoomSettingsPage />} />
           <Route path="/ranking" element={<RankingPage />} />
           <Route
             path="/admin"

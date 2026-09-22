@@ -1,8 +1,10 @@
 import { Link, NavLink, useLocation, useParams } from 'react-router-dom'
+import { useAuth } from '../../context/AuthContext'
 import { useRooms } from '../../hooks/useRooms'
 import { useFriends } from '../../hooks/useFriends'
 import { usePresence } from '../../context/PresenceContext'
 import { useUnread } from '../../context/UnreadContext'
+import { useRoomChannels } from '../../hooks/useRoomChannels'
 import UserPanel from './UserPanel'
 
 const STATUS_DOT = { online: 'bg-emerald-500', away: 'bg-amber-400' }
@@ -50,7 +52,8 @@ function FriendRow({ friend, active, unread, status }) {
  */
 export default function ContextSidebar() {
   const { pathname } = useLocation()
-  const { roomId } = useParams()
+  const { roomId, channelId } = useParams()
+  const { user } = useAuth()
   const { rooms } = useRooms()
   const { friends } = useFriends()
   const { others } = usePresence()
@@ -59,6 +62,15 @@ export default function ContextSidebar() {
   const presenceById = new Map(others.map((o) => [o.id, o.status]))
   const inServer = pathname.startsWith('/salas/') && roomId
   const room = inServer ? (rooms ?? []).find((r) => r.id === roomId) : null
+  const channelsHook = useRoomChannels(inServer ? roomId : null)
+  const channelsAvailable = inServer ? channelsHook.available : true
+  const textChannels = channelsAvailable
+    ? channelsHook.channels.filter((c) => c.type === 'text')
+    : [{ id: null, name: 'geral', type: 'text' }]
+  const voiceChannels = channelsAvailable
+    ? channelsHook.channels.filter((c) => c.type === 'voice')
+    : [{ id: null, name: 'sala de voz', type: 'voice' }]
+  const defaultText = textChannels[0]
 
   const navItem = (to, icon, label, badge = 0) => (
     <NavLink
@@ -90,33 +102,81 @@ export default function ContextSidebar() {
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 to-fuchsia-500 text-sm shadow">
               🏰
             </span>
-            <p className="truncate text-sm font-extrabold text-zinc-900 dark:text-zinc-50">
+            <p className="min-w-0 flex-1 truncate text-sm font-extrabold text-zinc-900 dark:text-zinc-50">
               {room?.name ?? 'Servidor'}
             </p>
+            {room && user && room.created_by === user.id && (
+              <Link
+                to={`/salas/${roomId}/config`}
+                aria-label="Configurar servidor"
+                title="Configurar servidor"
+                className="shrink-0 rounded-lg px-1 text-sm text-zinc-400 transition hover:text-violet-500"
+              >
+                ⚙️
+              </Link>
+            )}
           </header>
 
           <div className="flex-1 overflow-y-auto px-2.5 py-3">
             <p className="px-1.5 pb-1.5 text-[10px] font-black uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
               Canais de texto
             </p>
-            <Link
-              to={`/salas/${roomId}`}
-              className="flex items-center gap-2.5 rounded-xl bg-violet-500/10 px-2.5 py-1.5 text-xs font-extrabold text-violet-600 dark:text-violet-300"
-            >
-              💬 geral
-            </Link>
+            <div className="space-y-0.5">
+              {textChannels.map((c) => {
+                const to = c.id ? `/salas/${roomId}/c/${c.id}` : `/salas/${roomId}`
+                const isActive = c.id
+                  ? channelId === c.id
+                  : !channelId || (defaultText?.id === c.id ?? false)
+                return (
+                  <Link
+                    key={c.id ?? 'geral'}
+                    to={to}
+                    className={`flex items-center gap-2 rounded-xl px-2.5 py-1.5 text-xs font-extrabold transition ${
+                      isActive
+                        ? 'bg-violet-500/10 text-violet-600 dark:text-violet-300'
+                        : 'text-zinc-600 hover:bg-black/5 dark:text-zinc-300 dark:hover:bg-white/5'
+                    }`}
+                  >
+                    💬 {c.name}
+                  </Link>
+                )
+              })}
+            </div>
 
             <p className="px-1.5 pb-1.5 pt-4 text-[10px] font-black uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
               Canais de voz
             </p>
-            <div
-              className="flex cursor-not-allowed items-center gap-2.5 rounded-xl px-2.5 py-1.5 text-xs font-extrabold text-zinc-400 dark:text-zinc-600"
-              title="Canais de voz — chegam no próximo capítulo 🎙️"
-            >
-              🔊 sala de voz
-              <span className="ml-auto rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-                em breve
-              </span>
+            <div className="space-y-0.5">
+              {voiceChannels.map((c) => {
+                const isActive = c.id && channelId === c.id
+                return c.id ? (
+                  <Link
+                    key={c.id}
+                    to={`/salas/${roomId}/c/${c.id}`}
+                    className={`flex items-center gap-2 rounded-xl px-2.5 py-1.5 text-xs font-extrabold transition ${
+                      isActive
+                        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                        : 'text-zinc-600 hover:bg-black/5 dark:text-zinc-300 dark:hover:bg-white/5'
+                    }`}
+                  >
+                    🔊 {c.name}
+                    <span className="ml-auto rounded-full bg-emerald-500/10 px-1 py-0.5 text-[9px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                      breve
+                    </span>
+                  </Link>
+                ) : (
+                  <div
+                    key="voice-placeholder"
+                    className="flex cursor-not-allowed items-center gap-2 rounded-xl px-2.5 py-1.5 text-xs font-extrabold text-zinc-400 dark:text-zinc-600"
+                    title="Canais de voz — chegam no próximo capítulo 🎙️"
+                  >
+                    🔊 {c.name}
+                    <span className="ml-auto rounded-full bg-emerald-500/10 px-1 py-0.5 text-[9px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                      breve
+                    </span>
+                  </div>
+                )
+              })}
             </div>
 
             <div className="mt-4 border-t border-zinc-200/70 pt-3 dark:border-white/5">

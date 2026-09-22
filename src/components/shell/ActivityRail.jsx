@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { useFriends } from '../../hooks/useFriends'
 import { usePresence } from '../../context/PresenceContext'
 
@@ -7,10 +7,16 @@ const METAS = {
   away: { dot: 'bg-amber-400', label: '🟡 Ausente' },
 }
 
-/** Painel direito "Ativo agora" (xl+): só AMIGOS online — a privacidade continua. */
+/**
+ * Painel direito "Ativo agora": só AMIGOS online — a privacidade continua.
+ * Só aparece nas telas de hub; dentro de servidor/conversa o espaço é do chat.
+ */
 export default function ActivityRail() {
+  const { pathname } = useLocation()
   const { friends } = useFriends()
   const { others } = usePresence()
+
+  if (pathname.startsWith('/salas/') || pathname.startsWith('/chat/')) return null
 
   const friendIds = new Set(friends.map((f) => f.userId))
   const online = others.filter((o) => friendIds.has(o.id) && (o.status === 'online' || o.status === 'away')).slice(0, 10)

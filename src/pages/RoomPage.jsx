@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext'
 import { useProfile } from '../hooks/useProfile'
 import { useRooms } from '../hooks/useRooms'
 import { useRoomChat } from '../hooks/useRoomChat'
+import { useRoomChannels } from '../hooks/useRoomChannels'
 import { useQuizGame } from '../hooks/useQuizGame'
 import QuizPanel from '../components/QuizPanel'
 import MessageList from '../components/chat/MessageList'
@@ -17,13 +18,29 @@ const gameOf = (id) => GAMES.find((g) => g.id === id)
 // 🧊 pivot Discord: Quiz fica escondido por ora (volta como extra num capítulo futuro)
 const QUIZ_ENABLED = false
 
-/** Dentro do servidor: #geral (texto) com membros ao vivo ao lado. */
+/** Dentro do servidor: canal de texto com membros ao vivo ao lado (voz: chega no cap.2). */
 export default function RoomPage() {
-  const { roomId } = useParams()
+  const { roomId, channelId } = useParams()
   const { user } = useAuth()
   const { profile } = useProfile()
   const { join, leave } = useRooms()
-  const { messages, loading: chatLoading, blocked: chatBlocked, send } = useRoomChat(roomId)
+  const { channels, available: channelsAvailable } = useRoomChannels(roomId)
+
+  // canal ativo: o da URL, senão o primeiro de texto, senão "geral" implícito (v14 pendente)
+  const activeChannel = useMemo(() => {
+    if (!channelsAvailable) return { id: null, type: 'text', name: 'geral' }
+    return (
+      channels.find((c) => c.id === channelId) ??
+      channels.find((c) => c.type === 'text') ??
+      null
+    )
+  }, [channelsAvailable, channels, channelId])
+  const inVoice = activeChannel?.type === 'voice'
+
+  const { messages, loading: chatLoading, blocked: chatBlocked, send } = useRoomChat(
+    roomId,
+    inVoice ? '__none__' : (activeChannel?.id ?? undefined)
+  )
 
   const [room, setRoom] = useState(null)
   const [notFound, setNotFound] = useState(false)
@@ -142,7 +159,7 @@ export default function RoomPage() {
             <>
               <div className="flex min-w-0 items-baseline gap-2">
                 <p className="truncate text-base font-extrabold text-zinc-900 dark:text-zinc-50">
-                  💬 geral
+                  {inVoice ? '🔊' : '💬'} {activeChannel?.name ?? 'geral'}
                 </p>
                 <p className="hidden truncate text-xs text-zinc-400 sm:inline dark:text-zinc-500">
                   · {room.name} · {game?.name ?? 'Servidor de texto'}
@@ -153,6 +170,16 @@ export default function RoomPage() {
                 <span className="whitespace-nowrap rounded-full bg-emerald-500/10 px-3 py-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
                   🟢 {inRoomNow.size} online aqui
                 </span>
+                {room.created_by === user?.id && (
+                  <Link
+                    to={`/salas/${roomId}/config`}
+                    aria-label="Configurar servidor"
+                    title="Configurar servidor"
+                    className="rounded-xl border border-zinc-200 px-3 py-1.5 text-sm text-zinc-400 transition hover:border-violet-400/60 hover:text-violet-500 dark:border-white/10"
+                  >
+                    ⚙️
+                  </Link>
+                )}
                 <button
                   type="button"
                   onClick={() => setShowMembers((v) => !v)}
@@ -224,7 +251,24 @@ export default function RoomPage() {
                 </div>
               )}
 
-              {QUIZ_ENABLED && tab === 'quiz' ? (
+              {inVoice ? (
+                /* 🔮 cap.2: quadro do canal de voz (entrar/sair, mutar, quem tá falando) */
+                <div className="flex min-h-[42vh] flex-1 flex-col items-center justify-center rounded-3xl border border-dashed border-emerald-400/40 bg-emerald-400/5 p-10 text-center">
+                  <span className="flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-br from-emerald-500 to-teal-600 text-3xl shadow">
+                    🔊
+                  </span>
+                  <p className="mt-4 text-base font-extrabold text-zinc-900 dark:text-zinc-50">
+                    Canal de voz <span className="text-emerald-500">{activeChannel?.name}</span>
+                  </p>
+                  <p className="mt-1 max-w-xs text-xs leading-relaxed text-zinc-400 dark:text-zinc-500">
+                    Aqui você vai <strong>entrar, mutar 🎙️ e ver quem tá falando</strong> ao vivo —
+                    com WebRTC próprio e zero custo. Chega no próximo capítulo!
+                  </p>
+                  <span className="mt-4 rounded-full bg-emerald-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400">
+                    em breve — cap. 2
+                  </span>
+                </div>
+              ) : QUIZ_ENABLED && tab === 'quiz' ? (
                 <QuizPanel quiz={quiz} members={members} />
               ) : (
                 <>
@@ -248,8 +292,8 @@ export default function RoomPage() {
                         meId={user?.id}
                         byId={memberById}
                         emptyIcon="💬"
-                        emptyTitle="Bem-vindo(a) ao #geral!"
-                        emptyHint="Este é o começo do canal de texto do servidor. Manda a primeira mensagem e quebra o gelo."
+                        emptyTitle={`Bem-vindo(a) ao #${activeChannel?.name ?? 'geral'}!`}
+                        emptyHint="Este é o começo deste canal de texto. Manda a primeira mensagem e quebra o gelo."
                       />
                     )}
                   </div>
@@ -258,8 +302,8 @@ export default function RoomPage() {
                   {room && (
                     <div className="mt-3">
                       <ChatComposer
-                        key={roomId}
-                        placeholder={`Mensagem em #geral${room ? '' : ''}`}
+                        key={`${roomId}:${activeChannel?.id ?? 'geral'}`}
+                        placeholder={`Mensagem em #${activeChannel?.name ?? 'geral'}`}
                         maxChars={500}
                         onSend={send}
                       />

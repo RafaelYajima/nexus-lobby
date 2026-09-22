@@ -92,32 +92,43 @@ export default function MessageList({
             <div
               className={`group -mx-2 flex gap-3 rounded-xl px-2 py-1 transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.04] ${
                 grouped ? '' : 'mt-2'
-              }`}
+              } ${mine ? 'flex-row-reverse' : ''}`}
             >
               {/* avatar / hover-timestamp */}
               <div className="w-9 shrink-0">
                 {grouped ? (
-                  <span className="block pt-0.5 text-right text-[10px] leading-6 text-zinc-400 opacity-0 transition group-hover:opacity-100">
+                  <span
+                    className={`block pt-0.5 text-[10px] leading-6 text-zinc-400 opacity-0 transition group-hover:opacity-100 ${
+                      mine ? 'text-left' : 'text-right'
+                    }`}
+                  >
                     {timeLabel(m.created_at)}
                   </span>
                 ) : (
                   <span
-                    className={`flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br text-xs font-black text-white shadow ${AUTHOR_TONES[t]}`}
+                    className={`flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br text-xs font-black text-white shadow ${
+                      mine ? 'from-violet-600 to-fuchsia-500' : AUTHOR_TONES[t]
+                    }`}
                   >
                     {(author.username || '?').slice(0, 1).toUpperCase()}
                   </span>
                 )}
               </div>
 
-              <div className="min-w-0 flex-1">
+              <div className={`min-w-0 flex-1 ${mine ? 'text-right' : ''}`}>
                 {!grouped && (
-                  <p className="flex flex-wrap items-baseline gap-x-2">
+                  <p
+                    className={`flex flex-wrap items-baseline gap-x-2 ${
+                      mine ? 'flex-row-reverse' : ''
+                    }`}
+                  >
                     <span
                       className={`text-sm font-extrabold ${
-                        mine ? 'text-zinc-900 dark:text-zinc-50' : NAME_TONES[t]
+                        mine ? 'text-violet-600 dark:text-violet-300' : NAME_TONES[t]
                       }`}
                     >
                       {author.username ?? 'jogador'}
+                      {mine && <span className="text-zinc-400"> (você)</span>}
                     </span>
                     {author.tag && (
                       <span className="font-mono text-[10px] text-zinc-400">#{author.tag}</span>
@@ -125,16 +136,17 @@ export default function MessageList({
                     <span className="text-[10px] text-zinc-400 dark:text-zinc-500">
                       {timeLabel(m.created_at)}
                     </span>
-                    {mine && (
-                      <span className="rounded-md bg-violet-500/10 px-1.5 text-[9px] font-black uppercase tracking-wider text-violet-500 dark:text-violet-300">
-                        você
-                      </span>
-                    )}
                   </p>
                 )}
-                <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-zinc-700 dark:text-zinc-200">
-                  {m.content}
-                </p>
+                {mine ? (
+                  <span className="inline-block max-w-[85%] whitespace-pre-wrap break-words rounded-xl bg-violet-600/12 px-3 py-1.5 text-left text-sm leading-relaxed text-zinc-800 ring-1 ring-violet-500/20 dark:bg-violet-500/15 dark:text-zinc-100">
+                    {m.content}
+                  </span>
+                ) : (
+                  <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-zinc-700 dark:text-zinc-200">
+                    {m.content}
+                  </p>
+                )}
               </div>
             </div>
           </Fragment>
